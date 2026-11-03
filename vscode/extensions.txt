@@ -1,0 +1,16 @@
+anthropic.claude-code
+formulahendry.code-runner
+fwcd.kotlin
+golang.go
+mathiasfrohlich.kotlin
+naco-siren.gradle-language
+openai.chatgpt
+openai.codex-audio
+redhat.java
+sethjones.kotlin-on-vscode
+vscjava.vscode-gradle
+vscjava.vscode-java-debug
+vscjava.vscode-java-dependency
+vscjava.vscode-java-pack
+vscjava.vscode-java-test
+vscjava.vscode-maven

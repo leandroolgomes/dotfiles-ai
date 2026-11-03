@@ -1,0 +1,2 @@
+# atuin client config (only non-default settings; atuin fills in the rest)
+enter_accept = true

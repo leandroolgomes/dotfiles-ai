@@ -1,0 +1,7 @@
+{
+    "claudeCode.preferredLocation": "panel",
+    "claudeCode.useTerminal": true,
+    "terminal.integrated.initialHint": false,
+    "workbench.editor.enablePreview": false,
+    "workbench.startupEditor": "none"
+}

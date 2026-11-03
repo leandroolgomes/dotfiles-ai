@@ -1,1 +1,16 @@
 .DS_Store
+
+# secrets / machine-local state - never commit
+.env
+.env.*
+*.key
+*.pem
+id_*
+!*.pub
+auth.json
+*token*
+*secret*
+.claude.json
+settings.local.json
+.mcp.json
+nvim/lazy/

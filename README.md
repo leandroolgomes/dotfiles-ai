@@ -11,6 +11,13 @@ Terminal setup inspired by the video "I Tried Everything. This is the Best Termi
 | zsh (zoxide, atuin, mise, fzf, eza) | `zsh/zshrc` (sourced from `~/.zshrc`) |
 | mise (global tool versions) | `mise-global/config.toml` |
 | tuios (seeded once, not linked; sidebar editor = nvim) | `tuios/config.toml` |
+| nvim (LazyVim) | `nvim/` |
+| Claude Code (settings, hooks, plugins list) | `claude/settings.json` |
+| git (+ delta, global ignore) | `git/gitconfig`, `git/ignore` |
+| atuin | `atuin/config.toml` |
+| VS Code (settings + extensions) | `vscode/` |
+| SSH (config only, never keys) | `ssh/config` |
+| macOS preferences (opt-in, not run by install) | `macos/defaults.sh` |
 | Packages | `Brewfile` (includes tuios) |
 
 ## Install

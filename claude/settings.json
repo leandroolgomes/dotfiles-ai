@@ -1,0 +1,189 @@
+{
+  "model": "sonnet",
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y @owloops/claude-powerline@latest --style=powerline"
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "figma@claude-plugins-official": true,
+    "mgrep@Mixedbread-Grep": false
+  },
+  "effortLevel": "medium",
+  "tui": "fullscreen",
+  "agentPushNotifEnabled": true,
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf \"\\a\" > /dev/tty 2>/dev/null; osascript -e \"display notification \\\"Claude precisa de você\\\" with title \\\"Claude Code\\\"\" >/dev/null 2>&1; true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf \"\\a\" > /dev/tty 2>/dev/null; true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 310,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "ElicitationResult": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

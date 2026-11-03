@@ -37,6 +37,13 @@ link ghostty/config            "$HOME/.config/ghostty/config"
 link tmux/tmux.conf            "$HOME/.config/tmux/tmux.conf"
 link starship/starship.toml    "$HOME/.config/starship.toml"
 link mise-global/config.toml           "$HOME/.config/mise/config.toml"
+link nvim                      "$HOME/.config/nvim"
+link atuin/config.toml         "$HOME/.atuin/config.toml"
+link git/gitconfig             "$HOME/.gitconfig"
+link git/ignore                "$HOME/.config/git/ignore"
+link claude/settings.json      "$HOME/.claude/settings.json"
+link vscode/settings.json      "$HOME/Library/Application Support/Code/User/settings.json"
+link ssh/config                "$HOME/.ssh/config"
 
 # tuios rewrites its own config (set-config, hooks), so seed it once instead of symlinking.
 TUIOS_CFG="$HOME/Library/Application Support/tuios/config.toml"
@@ -55,8 +62,14 @@ if ! grep -qF "$MARK" "$HOME/.zshrc" 2>/dev/null; then
   fi
 fi
 
+# VS Code extensions (skipped if the `code` CLI is not on PATH)
+if command -v code >/dev/null; then
+  while read -r ext; do [[ -n "$ext" ]] && run code --install-extension "$ext" --force >/dev/null; done < "$DOTFILES/vscode/extensions.txt"
+fi
+
 TPM="$HOME/.tmux/plugins/tpm"
 [[ -d "$TPM" ]] || run git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM"
 if ((DRY)); then echo "[dry-run] $TPM/bin/install_plugins"; elif [[ -x "$TPM/bin/install_plugins" ]]; then "$TPM/bin/install_plugins" || true; fi
 
+log "Optional: review and run ./macos/defaults.sh for macOS preferences."
 log "Done. Open Ghostty and run tmux (prefix is Ctrl-a; Ctrl-a then I fetches plugins if needed)."
