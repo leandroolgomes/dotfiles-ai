@@ -9,7 +9,7 @@ Terminal setup inspired by the video "I Tried Everything. This is the Best Termi
 | tmux (+ sesh, SessionX, Floax, Catppuccin) | `tmux/tmux.conf` |
 | Starship | `starship/starship.toml` |
 | zsh (zoxide, atuin, mise, fzf, eza) | `zsh/zshrc` (sourced from `~/.zshrc`) |
-| Packages | `Brewfile` (includes tuios and workmux) |
+| Packages | `Brewfile` (includes tuios) |
 
 ## Install
 ```sh
