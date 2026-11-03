@@ -6,7 +6,7 @@ set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
-DRY=0; PACKAGES=1
+DRY=0; PACKAGES=1; BREW_FAILED=0
 for a in "$@"; do case "$a" in --dry-run) DRY=1;; --no-packages) PACKAGES=0;; esac; done
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -32,7 +32,8 @@ if ((PACKAGES)); then
   [[ "$(uname)" == "Darwin" ]] || { echo "macOS only (Homebrew)."; exit 1; }
   command -v brew >/dev/null || { echo "Install Homebrew first: https://brew.sh"; exit 1; }
   log "Installing packages from Brewfile"
-  run brew bundle --file="$DOTFILES/Brewfile"
+  # brew bundle tries every entry but exits non-zero if any fail; don't abort the whole install for that.
+  run brew bundle --file="$DOTFILES/Brewfile" || { BREW_FAILED=1; echo "WARNING: some Brewfile packages failed (see output above); continuing."; }
 fi
 
 link ghostty/config            "$HOME/.config/ghostty/config"
@@ -78,4 +79,5 @@ TPM="$HOME/.tmux/plugins/tpm"
 if ((DRY)); then echo "[dry-run] $TPM/bin/install_plugins"; elif [[ -x "$TPM/bin/install_plugins" ]]; then "$TPM/bin/install_plugins" || true; fi
 
 log "Optional: review and run ./macos/defaults.sh for macOS preferences."
+((BREW_FAILED)) && echo "WARNING: some Brewfile packages failed. Re-run: brew bundle --file=\"$DOTFILES/Brewfile\"" >&2
 log "Done. Open Ghostty and run tmux (prefix is Ctrl-a; Ctrl-a then I fetches plugins if needed)."
