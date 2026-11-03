@@ -18,7 +18,9 @@ link() {
   [[ -e "$src" ]] || { echo "missing $src"; return 1; }
   if [[ -L "$dst" && "$(readlink "$dst")" == "$src" ]]; then return; fi
   if [[ -e "$dst" || -L "$dst" ]]; then
-    run mkdir -p "$BACKUP_DIR"; run mv "$dst" "$BACKUP_DIR/"
+    # keep the path relative to $HOME so same-named files (settings.json, config, ...) never collide
+    local rel="${dst#"$HOME"/}"
+    run mkdir -p "$BACKUP_DIR/$(dirname "$rel")"; run mv "$dst" "$BACKUP_DIR/$rel"
     log "Backed up $dst -> $BACKUP_DIR"
   fi
   run mkdir -p "$(dirname "$dst")"
@@ -61,7 +63,7 @@ MARK="# dotfiles: $DOTFILES/zsh/zshrc"
 if ! grep -qF "$MARK" "$HOME/.zshrc" 2>/dev/null; then
   log "Adding source line to ~/.zshrc"
   if ((DRY)); then echo "[dry-run] append to ~/.zshrc"; else
-    [[ -f "$HOME/.zshrc" ]] && { mkdir -p "$BACKUP_DIR"; cp "$HOME/.zshrc" "$BACKUP_DIR/"; }
+    [[ -f "$HOME/.zshrc" ]] && { mkdir -p "$BACKUP_DIR"; cp "$HOME/.zshrc" "$BACKUP_DIR/.zshrc"; }
     printf '\n%s\n[ -f "%s/zsh/zshrc" ] && source "%s/zsh/zshrc"\n' "$MARK" "$DOTFILES" "$DOTFILES" >> "$HOME/.zshrc"
   fi
 fi
