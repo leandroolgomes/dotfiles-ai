@@ -36,6 +36,7 @@ fi
 link ghostty/config            "$HOME/.config/ghostty/config"
 link tmux/tmux.conf            "$HOME/.config/tmux/tmux.conf"
 link starship/starship.toml    "$HOME/.config/starship.toml"
+link mise-global/config.toml           "$HOME/.config/mise/config.toml"
 
 # ~/.zshrc stays yours; we only add one line that sources the repo's zsh/zshrc.
 MARK="# dotfiles: $DOTFILES/zsh/zshrc"

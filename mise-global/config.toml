@@ -1,0 +1,8 @@
+# Global mise config (replaces asdf's ~/.tool-versions).
+[tools]
+go = "1.25.4"
+node = "24.13.0"
+
+[settings]
+# also read legacy version files such as .tool-versions and .nvmrc in projects
+idiomatic_version_file_enable_tools = ["node", "go"]
