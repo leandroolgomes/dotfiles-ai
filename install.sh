@@ -38,6 +38,13 @@ link tmux/tmux.conf            "$HOME/.config/tmux/tmux.conf"
 link starship/starship.toml    "$HOME/.config/starship.toml"
 link mise-global/config.toml           "$HOME/.config/mise/config.toml"
 
+# tuios rewrites its own config (set-config, hooks), so seed it once instead of symlinking.
+TUIOS_CFG="$HOME/Library/Application Support/tuios/config.toml"
+if [[ ! -e "$TUIOS_CFG" ]]; then
+  run mkdir -p "$(dirname "$TUIOS_CFG")"; run cp "$DOTFILES/tuios/config.toml" "$TUIOS_CFG"
+  log "Seeded $TUIOS_CFG"
+fi
+
 # ~/.zshrc stays yours; we only add one line that sources the repo's zsh/zshrc.
 MARK="# dotfiles: $DOTFILES/zsh/zshrc"
 if ! grep -qF "$MARK" "$HOME/.zshrc" 2>/dev/null; then

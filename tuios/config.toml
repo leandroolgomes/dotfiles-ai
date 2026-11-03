@@ -1,0 +1,8 @@
+# tuios config. install.sh seeds this to the tuios config dir only if none exists,
+# because tuios rewrites that file itself (set-config, integration hooks).
+[startup]
+tiled = true
+daemon = true
+
+[appearance.sidebar]
+editor = "nvim"

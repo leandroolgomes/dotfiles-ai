@@ -10,6 +10,7 @@ Terminal setup inspired by the video "I Tried Everything. This is the Best Termi
 | Starship | `starship/starship.toml` |
 | zsh (zoxide, atuin, mise, fzf, eza) | `zsh/zshrc` (sourced from `~/.zshrc`) |
 | mise (global tool versions) | `mise-global/config.toml` |
+| tuios (seeded once, not linked; sidebar editor = nvim) | `tuios/config.toml` |
 | Packages | `Brewfile` (includes tuios) |
 
 ## Install
