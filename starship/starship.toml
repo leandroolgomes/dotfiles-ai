@@ -1,0 +1,9 @@
+add_newline = true
+[git_branch]
+symbol = " "
+[golang]
+symbol = " "
+[aws]
+symbol = "  "
+[kubernetes]
+disabled = false
