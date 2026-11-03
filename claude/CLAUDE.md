@@ -18,7 +18,7 @@
 - Dotfiles live in a private repo (dotfiles-ai); config files under `$HOME` may be symlinks into it.
 
 ## Stack
-- Go, Node/TypeScript, Kotlin/Java (Android). Use each ecosystem's standard formatter and test runner.
+- Go, Node/TypeScript, Java. Use each ecosystem's standard formatter and test runner.
 
 ## Working style
 - Run the relevant tests/linters after changes and report real output; say so if something was not run.
