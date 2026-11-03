@@ -1,5 +1,4 @@
 # Packages for this setup. Install with: brew bundle --file=Brewfile
-tap "can1357/tap"
 
 # shell / terminal
 brew "zsh"
@@ -37,7 +36,6 @@ brew "poppler"
 
 # AI tools
 brew "opencode"
-brew "can1357/tap/omp"
 
 # casks
 cask "ghostty"
