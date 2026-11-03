@@ -1,5 +1,4 @@
 # Packages for this setup. Install with: brew bundle --file=Brewfile
-tap "akitaonrails/tap"
 tap "can1357/tap"
 
 # shell / terminal
@@ -38,7 +37,6 @@ brew "poppler"
 
 # AI tools
 brew "opencode"
-brew "akitaonrails/tap/ai-jail"
 brew "can1357/tap/omp"
 
 # casks
