@@ -7,3 +7,5 @@ symbol = " "
 symbol = "  "
 [kubernetes]
 disabled = false
+[gcloud]
+disabled = true
