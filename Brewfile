@@ -30,7 +30,6 @@ brew "tree-sitter-cli"
 brew "uv"
 brew "watchman"
 brew "cocoapods"
-brew "postgresql@14"
 brew "pandoc"
 brew "poppler"
 
