@@ -4,7 +4,7 @@ symbol = " "
 [golang]
 symbol = " "
 [aws]
-symbol = "  "
+disabled = true
 [kubernetes]
 disabled = false
 [gcloud]
