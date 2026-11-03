@@ -77,6 +77,21 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/block-dangerous.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/gitleaks-commit.sh",
+            "timeout": 30
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "command": "tuios agent-hook claude-code --integration 3",

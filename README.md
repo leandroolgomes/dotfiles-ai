@@ -12,7 +12,7 @@ Terminal setup inspired by the video "I Tried Everything. This is the Best Termi
 | mise (global tool versions) | `mise-global/config.toml` |
 | tuios (seeded once, not linked; sidebar editor = nvim) | `tuios/config.toml` |
 | nvim (LazyVim) | `nvim/` |
-| Claude Code (settings, hooks, plugins list) | `claude/settings.json` |
+| Claude Code (global `CLAUDE.md`, settings, hooks, agents, `/commit` skill) | `claude/` |
 | git (+ delta, global ignore) | `git/gitconfig`, `git/ignore` |
 | atuin | `atuin/config.toml` |
 | VS Code (settings + extensions) | `vscode/` |
