@@ -35,6 +35,37 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 | `agents/test-runner.md` | Runs tests and returns only failures |
 | `skills/commit/` | `/commit` skill |
 
+#### Agentic SDLC with Superpowers
+
+The [superpowers](https://github.com/obra/superpowers) plugin (`superpowers@claude-plugins-official`,
+enabled in `settings.json`) adds a skill per SDLC phase. Claude loads each one automatically when the
+phase starts; you rarely need to call them by hand.
+
+```
+spec -> plan -> isolate -> implement -> debug -> verify -> review -> ship
+```
+
+| Phase | Skill | What it does |
+|---|---|---|
+| Spec | `brainstorming` | Clarifies intent and requirements before any creative work or new feature |
+| Plan | `writing-plans` | Turns a spec into a multi-step plan before touching code |
+| Isolate | `using-git-worktrees` | Gives the work an isolated workspace (native tools or `git worktree`) |
+| Implement | `test-driven-development` | Red-green-refactor: write the failing test before the implementation |
+| | `executing-plans` | Runs a plan inline, in the current session |
+| | `subagent-driven-development` | Runs a plan with independent tasks via subagents |
+| | `dispatching-parallel-agents` | Fans out 2+ independent tasks to parallel agents |
+| Debug | `systematic-debugging` | Root cause first (reproduce, hypothesize, confirm), then fix |
+| Verify | `verification-before-completion` | Run the checks and read the output before claiming "done" |
+| Review | `requesting-code-review` | Reviews work against requirements before merging |
+| | `receiving-code-review` | Verifies feedback technically instead of agreeing blindly |
+| Ship | `finishing-a-development-branch` | Decides how to integrate: merge, PR or cleanup |
+| Meta | `writing-skills` | Creates and tests new skills |
+| | `using-superpowers` | Teaches Claude how to find and use the skills above |
+| | `diagnosing-superpowers` | Post-mortem for a session that went wrong |
+
+Complements the local pieces: `/commit` for the commit step, the `code-reviewer` agent for read-only
+reviews and `test-runner` for failure-only test output. The skill list follows upstream and may change.
+
 The hooks are guardrails against accidents, not a security boundary. Not versioned on purpose:
 `~/.claude.json`, `settings.local.json`, history, projects, caches and tool-installed skills.
 
