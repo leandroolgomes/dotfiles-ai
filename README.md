@@ -27,7 +27,7 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 
 | File | Purpose |
 |---|---|
-| `CLAUDE.md` | Global instructions (English, concise; safety rules, environment, stack) |
+| `CLAUDE.md` | Global instructions (English, concise; safety rules, environment, stack, working principles) |
 | `settings.json` | Model, statusline, enabled plugins, hooks (notifications, tuios, safety) |
 | `hooks/block-dangerous.sh` | Blocks destructive Bash commands (`rm -rf ~`, force-push, `DROP TABLE`, `curl \| sh`, ...) |
 | `hooks/gitleaks-commit.sh` | Runs `gitleaks` on staged changes before `git commit` |
