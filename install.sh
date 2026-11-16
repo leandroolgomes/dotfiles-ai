@@ -47,8 +47,9 @@ link git/ignore                "$HOME/.config/git/ignore"
 link claude/settings.json      "$HOME/.claude/settings.json"
 link claude/CLAUDE.md          "$HOME/.claude/CLAUDE.md"
 link claude/hooks              "$HOME/.claude/hooks"
-link claude/agents             "$HOME/.claude/agents"
-link claude/skills/commit      "$HOME/.claude/skills/commit"
+# Per-entry links: ~/.claude/{agents,skills} also hold agents/skills installed by other tools.
+for f in "$DOTFILES"/claude/agents/*.md; do link "claude/agents/${f##*/}" "$HOME/.claude/agents/${f##*/}"; done
+for d in "$DOTFILES"/claude/skills/*/; do d="${d%/}"; link "claude/skills/${d##*/}" "$HOME/.claude/skills/${d##*/}"; done
 link vscode/settings.json      "$HOME/Library/Application Support/Code/User/settings.json"
 link ssh/config                "$HOME/.ssh/config"
 link bin/review-fanout         "$HOME/.local/bin/review-fanout"
