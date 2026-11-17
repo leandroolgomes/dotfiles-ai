@@ -72,6 +72,28 @@ reviews and `test-runner` for failure-only test output. The skill list follows u
 The hooks are guardrails against accidents, not a security boundary. Not versioned on purpose:
 `~/.claude.json`, `settings.local.json`, history, projects, caches and tool-installed skills.
 
+### Work context (`~/work-context/`, private)
+
+This repo is public and generic. Everything about your company (conventions, incidents, internal
+tools, rules about what needs you) lives in `~/work-context/`, a private folder that is never committed
+here. Keep it in a private git repo or other company-approved storage.
+
+```
+~/work-context/
+  inbox/            config.toml, rules.toml, sources.d/   ← agent-inbox (agent-inbox init creates it)
+  standards/        team conventions                       ← /hypothesis proposes proof items from these
+  incidents/        one rule per postmortem                ← /hypothesis proposes proof items from these
+  hypotheses/       closed HYPOTHESIS.md files             ← /hypothesis close
+  calibration.md    one line per closed hypothesis         ← /hypothesis close
+```
+
+Nothing here is required: each feature works without it and uses whatever exists. Create `inbox/` with
+`agent-inbox init` (or point `AGENT_INBOX_HOME` elsewhere); the `/hypothesis` parts are created as you use it.
+
+Optional pattern, not set up by this repo: put the short context every agent should know in
+`~/work-context/CORE.md` (team conventions, plus an index of which files to read for which code) and add
+`@~/work-context/CORE.md` to your own `~/.claude/CLAUDE.md` so every session loads it.
+
 ### Agent inbox (`bin/agent-inbox`)
 
 One queue of what needs you: agents blocked on you or finished, review requests, red CI, and any
