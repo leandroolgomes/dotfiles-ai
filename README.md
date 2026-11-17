@@ -32,11 +32,11 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 | `settings.json` | Model, statusline, enabled plugins, hooks (notifications, tuios, safety) |
 | `hooks/block-dangerous.sh` | Blocks destructive Bash commands (`rm -rf ~`, force-push, `DROP TABLE`, `curl \| sh`, ...) |
 | `hooks/gitleaks-commit.sh` | Runs `gitleaks` on staged changes before `git commit` |
-| `hooks/bet-proof-gate.sh` | Stop hook: with an active `BET.md`, blocks "done" until each proof item has evidence and the report lists decisions |
+| `hooks/hypothesis-proof-gate.sh` | Stop hook: with an active `HYPOTHESIS.md`, blocks "done" until each proof item has evidence and the report lists decisions |
 | `agents/code-reviewer.md` | Read-only reviewer for recent diffs |
 | `agents/test-runner.md` | Runs tests and returns only failures |
 | `skills/commit/` | `/commit` skill |
-| `skills/bet/` | `/bet`: you write your guess, risk and proof first; the agent works to that finish line and reports its decisions. `/bet close` logs calibration to `~/work-context/` |
+| `skills/hypothesis/` | `/hypothesis`: you write your guess, risk and proof first; the agent works to that finish line and reports its decisions. `/hypothesis close` logs calibration to `~/work-context/` |
 
 #### Agentic SDLC with Superpowers
 
@@ -92,24 +92,24 @@ agent-inbox init        # create the private overlay in ~/work-context/inbox/
 - No credentials are stored: sources use your own CLI logins (`gh auth login`) or the Keychain.
 - Contract and layout: `inbox/README.md`.
 
-### Critical-thinking loop (`/bet`)
+### Critical-thinking loop (`/hypothesis`)
 
 Keeps you doing the thinking while the agent does the work: your guess comes first, proof is the
 finish line, and you read the agent's decisions instead of the whole diff.
 
 ```
-/bet add DynamoDB support to the DLQ manager   # you answer: guess, biggest risk, what would change your mind, proof
-/bet status                                    # proof progress and decisions so far
-/bet close                                     # your verdict → ~/work-context/calibration.md
+/hypothesis add DynamoDB support to the DLQ manager   # you answer: guess, biggest risk, what would change your mind, proof
+/hypothesis status                                    # proof progress and decisions so far
+/hypothesis close                                     # your verdict → ~/work-context/calibration.md
 ```
 
-1. `/bet <task>` asks for your answers first (no suggestions, to avoid anchoring), then proposes extra
-   proof items you can check with a command, and writes `BET.md` at the git root (globally git-ignored).
+1. `/hypothesis <task>` asks for your answers first (no suggestions, to avoid anchoring), then proposes extra
+   proof items you can check with a command, and writes `HYPOTHESIS.md` at the git root (globally git-ignored).
 2. The agent works toward that proof and logs every decision you didn't specify, flagging contract changes with ⚠️.
-3. Before stopping it fills `BET.md`: evidence under each proof item (or `[!]` with a reason), "Bet vs.
-   what I did" and "Decisions you didn't make". The `bet-proof-gate.sh` Stop hook blocks "done" while
+3. Before stopping it fills `HYPOTHESIS.md`: evidence under each proof item (or `[!]` with a reason), "Hypothesis vs.
+   what I did" and "Decisions you didn't make". The `hypothesis-proof-gate.sh` Stop hook blocks "done" while
    that is missing; it nudges once per stop, so the agent can still stop to ask you something.
-4. `/bet close` records whether your guess and risk were right. Over time `calibration.md` shows where
+4. `/hypothesis close` records whether your guess and risk were right. Over time `calibration.md` shows where
    your instincts are reliable.
 
 ## Install

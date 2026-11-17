@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Stop hook: if the repo has an active BET.md (from /bet), don't let Claude finish until every proof item
+# Stop hook: if the repo has an active HYPOTHESIS.md (from /hypothesis), don't let Claude finish until every proof item
 # is checked with evidence under it (or marked [!] blocked with a reason) and the report lists decisions.
 # Nudges once per stop: if Claude stops again right after being blocked (stop_hook_active), it is allowed,
-# so asking the user a question mid-task still works. Unproven items stay visible in BET.md.
+# so asking the user a question mid-task still works. Unproven items stay visible in HYPOTHESIS.md.
 set -uo pipefail
 
 input=$(cat)
@@ -11,9 +11,9 @@ command -v jq >/dev/null || exit 0
 
 cwd=$(jq -r '.cwd // empty' <<<"$input"); cwd=${cwd:-$PWD}
 root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || echo "$cwd")
-bet="$root/BET.md"
-[[ -f "$bet" ]] || exit 0
-grep -qE '^status:[[:space:]]*active' "$bet" || exit 0
+file="$root/HYPOTHESIS.md"
+[[ -f "$file" ]] || exit 0
+grep -qE '^status:[[:space:]]*active' "$file" || exit 0
 
 missing=$(awk '
   /^## /           { in_proof = ($0 ~ /^## Done means/); next }
@@ -26,14 +26,14 @@ missing=$(awk '
   in_proof && /^[[:space:]]+[^[:space:]]/ { pending = ""; next }
   function flush() { if (pending != "") print "no evidence under: " pending; pending = "" }
   END { flush(); if (!decisions) print "report: \"### Decisions you didn'\''t make\" is empty (write \"none\" if there were none)" }
-' "$bet")
+' "$file")
 
 [[ -z "$missing" ]] && exit 0
 
-reason="BET.md ($bet) is active and the finish line is not met:
+reason="HYPOTHESIS.md ($file) is active and the finish line is not met:
 $missing
 
 Before stopping: run the proof, check each item and put the evidence (command + key output) on indented
 lines under it. If an item can't be proven here, mark it - [!] with the reason. Fill the Report section
-(Bet vs. what I did, Decisions you didn't make). If you are only stopping to ask the user something, stop again."
+(Hypothesis vs. what I did, Decisions you didn't make). If you are only stopping to ask the user something, stop again."
 jq -n --arg r "$reason" '{decision: "block", reason: $r}'
