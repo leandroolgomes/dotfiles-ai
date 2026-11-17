@@ -1,0 +1,12 @@
+# agent-inbox config. Lives at ~/work-context/inbox/config.toml (private, never in dotfiles).
+# Each [sources.<name>] table is passed to that source as JSON in $AGENT_INBOX_SOURCE_CONFIG.
+# Any source can be turned off with: enabled = false
+# Credentials never go here: each source uses your own CLI login or the macOS Keychain.
+
+[sources.tuios]
+enabled = true
+
+[sources.github]
+hosts = ["github.com"]            # add "github.company.com" after: gh auth login --hostname github.company.com
+repos = []                        # watch red CI, e.g. ["org/dlq-manager", "github.company.com:org/api"]
+branch = "main"

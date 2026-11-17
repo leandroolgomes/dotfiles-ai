@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# agent-inbox source template. Copy to ~/work-context/inbox/sources.d/<name>, chmod +x, edit.
+# Contract (inbox/README.md):
+#   <name> check  → exit 0 + one status line | exit 3 + fix hint on stderr (not configured)
+#   <name> items  → one JSON object per line on stdout; exit 0
+# Config: $AGENT_INBOX_SOURCE_CONFIG holds [sources.<name>] from config.toml as JSON.
+# Credentials: read from your own CLI login or the Keychain, never from files in this folder:
+#   token=$(security find-generic-password -s "agent-inbox/<name>" -w 2>/dev/null)
+set -uo pipefail
+
+NAME=example
+token=$(security find-generic-password -s "agent-inbox/$NAME" -w 2>/dev/null) || {
+  echo "no token → security add-generic-password -s agent-inbox/$NAME -a \"\$USER\" -w" >&2; exit 3; }
+base=$(jq -r '.base_url // empty' <<<"${AGENT_INBOX_SOURCE_CONFIG:-{\}}")
+[[ -n "$base" ]] || { echo "set base_url under [sources.$NAME] in config.toml" >&2; exit 3; }
+
+case "${1:-items}" in
+  check)
+    # Make one cheap authenticated call so a bad token shows up here, not as an empty queue.
+    curl -fsS -H "Authorization: Bearer $token" "$base/api/me" >/dev/null \
+      || { echo "auth failed on $base → refresh the token" >&2; exit 3; }
+    echo "connected to $base"
+    ;;
+  items)
+    curl -fsS -H "Authorization: Bearer $token" "$base/api/my-items" | jq -c '.[] | {
+      source: "'"$NAME"'",
+      kind: "task",                 # rules match on this
+      id: .id,
+      title: .title,                # required
+      detail: .status,              # optional second line
+      url: .url,                    # optional
+      age_min: null,                # minutes since it started waiting, if known
+      tags: [],                     # e.g. labels, priority; rules can match one tag
+      hint: "today"                 # default level when no rule matches
+    }'
+    ;;
+  *) echo "usage: $0 check|items" >&2; exit 2;;
+esac

@@ -1,0 +1,31 @@
+# agent-inbox rules: first match wins. Items no rule matches use the source's hint.
+# Levels: now, today, done, fyi, ignore
+# Match keys (all optional, all must hold): source, kind, owner, tag, title_regex, min_age_min
+# Copy to ~/work-context/inbox/rules.toml (agent-inbox init does it) and tune there.
+
+# Agents waiting on you
+[[rule]]
+match = { source = "tuios", kind = "blocked" }
+level = "now"
+
+[[rule]]
+match = { source = "tuios", kind = "finished" }
+level = "done"
+
+# Red CI on a watched branch
+[[rule]]
+match = { source = "github", kind = "ci-red" }
+level = "now"
+
+# Reviews: blockers first, stale ones escalate after a day
+[[rule]]
+match = { source = "github", kind = "review", tag = "release-blocker" }
+level = "now"
+
+[[rule]]
+match = { source = "github", kind = "review", min_age_min = 1440 }
+level = "now"
+
+[[rule]]
+match = { source = "github", kind = "review", title_regex = "^(chore|deps|docs)[:(]|bump " }
+level = "fyi"

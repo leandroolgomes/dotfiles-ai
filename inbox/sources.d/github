@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""agent-inbox source: GitHub review requests and red CI on the default branch.
+
+Config ([sources.github] in config.toml):
+  hosts  = ["github.com", "github.company.com"]   # default: ["github.com"]
+  repos  = ["org/service", "github.company.com:org/api"]  # red-CI watch; host: prefix for non-default hosts
+  branch = "main"                                  # branch to watch (default: main)
+Auth: your own `gh auth login --hostname <host>`. Nothing is stored here.
+"""
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+cfg = json.loads(os.environ.get("AGENT_INBOX_SOURCE_CONFIG") or "{}")
+HOSTS = cfg.get("hosts", ["github.com"])
+REPOS = cfg.get("repos", [])
+BRANCH = cfg.get("branch", "main")
+
+
+def gh(host, *args):
+    env = dict(os.environ, GH_HOST=host)
+    r = subprocess.run(["gh", *args], capture_output=True, text=True, env=env, timeout=12)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.strip() or f"gh {' '.join(args)} failed")
+    return json.loads(r.stdout or "null")
+
+
+def age_min(ts):
+    if not ts:
+        return None
+    t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return int((datetime.now(timezone.utc) - t).total_seconds() // 60)
+
+
+def repos_on(host):
+    """Repos without a host: prefix belong to the first host."""
+    out = []
+    for r in REPOS:
+        h, _, name = r.rpartition(":")
+        if (h or HOSTS[0]) == host:
+            out.append(name)
+    return out
+
+
+def authed(host):
+    r = subprocess.run(["gh", "auth", "status", "--hostname", host], capture_output=True, text=True)
+    return r.returncode == 0
+
+
+def check():
+    from shutil import which
+    if not which("gh"):
+        print("gh not installed → brew install gh", file=sys.stderr)
+        sys.exit(3)
+    missing = [h for h in HOSTS if not authed(h)]
+    if missing:
+        print(f"not authed on {missing[0]} → gh auth login --hostname {missing[0]}", file=sys.stderr)
+        sys.exit(3)
+    repos = f", watching CI on {len(REPOS)} repos" if REPOS else ", no repos for CI (set repos in config.toml)"
+    print(f"authed on {', '.join(HOSTS)}{repos}")
+
+
+def items():
+    out, errors = [], []
+    for host in HOSTS:
+        if not authed(host):
+            errors.append(f"{host}: not authed")
+            continue
+        try:
+            prs = gh(host, "search", "prs", "--review-requested=@me", "--state=open", "--limit", "50",
+                     "--json", "number,title,url,repository,createdAt,labels,isDraft,author")
+            for p in prs or []:
+                if p.get("isDraft"):
+                    continue
+                labels = [l["name"].lower() for l in p.get("labels", [])]
+                out.append({
+                    "source": "github", "kind": "review", "id": p["url"],
+                    "title": f"{p['repository']['nameWithOwner']}#{p['number']} {p['title']}",
+                    "detail": f"by {p.get('author', {}).get('login', '?')}",
+                    "url": p["url"], "age_min": age_min(p.get("createdAt")),
+                    "tags": labels, "hint": "today",
+                })
+        except Exception as e:  # keep the other parts of this source working
+            errors.append(f"{host} reviews: {e}")
+        for repo in repos_on(host):
+            try:
+                runs = gh(host, "run", "list", "-R", repo, "--branch", BRANCH, "--limit", "20",
+                          "--json", "workflowName,conclusion,status,url,createdAt,displayTitle")
+                latest = {}
+                for r in runs or []:
+                    if r.get("status") == "completed":
+                        latest.setdefault(r["workflowName"], r)
+                for wf, r in latest.items():
+                    if r.get("conclusion") in ("failure", "timed_out", "startup_failure"):
+                        out.append({
+                            "source": "github", "kind": "ci-red", "id": r["url"],
+                            "title": f"{repo} {BRANCH} red: {wf}",
+                            "detail": r.get("displayTitle", ""), "url": r["url"],
+                            "age_min": age_min(r.get("createdAt")), "tags": [repo], "hint": "now",
+                        })
+            except Exception as e:
+                errors.append(f"{repo} CI: {e}")
+    for it in out:
+        print(json.dumps(it))
+    for e in errors:
+        print(e, file=sys.stderr)
+
+
+mode = sys.argv[1] if len(sys.argv) > 1 else "items"
+{"check": check, "items": items}.get(mode, lambda: sys.exit(2))()

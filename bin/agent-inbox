@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""agent-inbox: one queue of what needs you, from agents and the tools around them.
+
+Usage:
+  agent-inbox            Show the queue (needs you now / today / done / fyi)
+  agent-inbox --all      Also list FYI items instead of only counting them
+  agent-inbox --json     Print classified items as JSON
+  agent-inbox doctor     Show which sources are connected and how to fix the rest
+  agent-inbox init       Create the private overlay (config, rules, sources.d)
+
+Sources are executables in sources.d folders: the built-in ones next to this repo
+(inbox/sources.d) and private ones in $AGENT_INBOX_HOME/sources.d (default
+~/work-context/inbox). A private source with the same name replaces the built-in one.
+See inbox/README.md for the adapter contract.
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+try:
+    import tomllib
+except ImportError:  # Python < 3.11
+    sys.exit("agent-inbox: needs Python 3.11+ (tomllib); macOS /usr/bin/python3 is too old")
+
+REPO_INBOX = Path(os.path.realpath(__file__)).parent.parent / "inbox"
+HOME = Path(os.environ.get("AGENT_INBOX_HOME", "~/work-context/inbox")).expanduser()
+TIMEOUT = int(os.environ.get("AGENT_INBOX_TIMEOUT", "15"))
+NOT_CONFIGURED = 3
+LEVELS = ["now", "today", "done", "fyi", "ignore"]
+HEADERS = {
+    "now": "\U0001F534 NEEDS YOU NOW",
+    "today": "\U0001F7E1 TODAY",
+    "done": "✅ DONE, READY TO REVIEW",
+    "fyi": "⚪ FYI",
+}
+TTY = sys.stdout.isatty()
+
+
+def dim(s):
+    return f"\033[2m{s}\033[0m" if TTY else s
+
+
+def bold(s):
+    return f"\033[1m{s}\033[0m" if TTY else s
+
+
+def load_toml(path):
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except FileNotFoundError:
+        return {}
+    except tomllib.TOMLDecodeError as e:
+        sys.exit(f"agent-inbox: {path}: {e}")
+
+
+def config():
+    return load_toml(HOME / "config.toml")
+
+
+def rules_path():
+    p = HOME / "rules.toml"
+    return p if p.exists() else REPO_INBOX / "rules.default.toml"
+
+
+def discover():
+    """name -> path; private sources override built-in ones."""
+    found = {}
+    for d in (REPO_INBOX / "sources.d", HOME / "sources.d"):
+        if not d.is_dir():
+            continue
+        for p in sorted(d.iterdir()):
+            if p.name.startswith((".", "_")) or not p.is_file():
+                continue
+            if os.access(p, os.X_OK):
+                found[p.name] = p
+    return found
+
+
+def enabled_sources(cfg):
+    srcs = discover()
+    sc = cfg.get("sources", {})
+    return {n: p for n, p in srcs.items() if sc.get(n, {}).get("enabled", True)}
+
+
+def run_source(name, path, mode, cfg):
+    env = dict(os.environ)
+    env["AGENT_INBOX_SOURCE_CONFIG"] = json.dumps(cfg.get("sources", {}).get(name, {}))
+    try:
+        r = subprocess.run([str(path), mode], capture_output=True, text=True, timeout=TIMEOUT, env=env)
+    except subprocess.TimeoutExpired:
+        return {"name": name, "status": "timeout", "out": "", "err": f"no answer in {TIMEOUT}s"}
+    except OSError as e:
+        return {"name": name, "status": "error", "out": "", "err": str(e)}
+    status = {0: "ok", NOT_CONFIGURED: "not_configured"}.get(r.returncode, "error")
+    return {"name": name, "status": status, "out": r.stdout, "err": r.stderr.strip()}
+
+
+def run_all(mode, cfg):
+    srcs = enabled_sources(cfg)
+    with ThreadPoolExecutor(max_workers=max(1, len(srcs))) as ex:
+        futs = [ex.submit(run_source, n, p, mode, cfg) for n, p in srcs.items()]
+        return [f.result() for f in futs]
+
+
+def parse_items(res):
+    items, bad = [], 0
+    for line in res["out"].splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            it = json.loads(line)
+        except json.JSONDecodeError:
+            bad += 1
+            continue
+        if not isinstance(it, dict) or "title" not in it:
+            bad += 1
+            continue
+        it.setdefault("source", res["name"])
+        it.setdefault("tags", [])
+        items.append(it)
+    return items, bad
+
+
+def matches(rule, it):
+    m = rule.get("match", {})
+    for key in ("source", "kind", "owner"):
+        if key in m and it.get(key) != m[key]:
+            return False
+    if "tag" in m and m["tag"] not in it.get("tags", []):
+        return False
+    if "title_regex" in m and not re.search(m["title_regex"], it.get("title", ""), re.I):
+        return False
+    if "min_age_min" in m and (it.get("age_min") or 0) < m["min_age_min"]:
+        return False
+    return True
+
+
+def classify(items, rules):
+    for it in items:
+        level = next((r["level"] for r in rules if matches(r, it)), None)
+        if level is None:
+            level = it.get("hint") if it.get("hint") in LEVELS else "today"
+        it["level"] = level
+    return items
+
+
+def age(mins):
+    if mins is None:
+        return ""
+    mins = int(mins)
+    if mins < 60:
+        return f"{mins}m"
+    if mins < 1440:
+        return f"{mins // 60}h"
+    return f"{mins // 1440}d"
+
+
+def render(items, problems, show_fyi):
+    if not items and not problems:
+        print("Inbox zero. Nothing needs you.")
+        return
+    order = {"now": 0, "today": 1, "done": 2, "fyi": 3}
+    items = sorted(items, key=lambda i: (order.get(i["level"], 9), -(i.get("age_min") or 0)))
+    for level in ("now", "today", "done", "fyi"):
+        group = [i for i in items if i["level"] == level]
+        if not group:
+            continue
+        if level == "fyi" and not show_fyi:
+            print(f"\n{HEADERS[level]} {dim(f'({len(group)} hidden, --all to show)')}")
+            continue
+        print(f"\n{bold(HEADERS[level])}")
+        for i in group:
+            src = f"{i['source']}:{i.get('kind', '')}".rstrip(":")
+            print(f"  {src:<18} {age(i.get('age_min')):>4}  {i['title']}")
+            if i.get("detail"):
+                print(f"  {'':<18}       {dim(i['detail'])}")
+            if i.get("url") or i.get("action"):
+                print(f"  {'':<18}       {dim(i.get('url') or i.get('action'))}")
+    if problems:
+        print("\n" + dim("Source problems: " + ", ".join(problems) + ". Run: agent-inbox doctor"))
+
+
+def cmd_show(args):
+    cfg = config()
+    rules = load_toml(rules_path()).get("rule", [])
+    items, problems = [], []
+    for res in run_all("items", cfg):
+        if res["status"] == "ok":
+            got, bad = parse_items(res)
+            items += got
+            if bad:
+                problems.append(f"{res['name']} ({bad} unparsable lines skipped)")
+        else:
+            problems.append(f"{res['name']} ({res['status'].replace('_', ' ')})")
+    items = [i for i in classify(items, rules) if i["level"] != "ignore"]
+    if "--json" in args:
+        print(json.dumps({"items": items, "problems": problems}, indent=2))
+    else:
+        render(items, problems, "--all" in args)
+
+
+def cmd_doctor(_args):
+    cfg = config()
+    icon = {"ok": "✅", "not_configured": "⚪", "error": "❌", "timeout": "⏱️ "}
+    print(bold("Sources"))
+    srcs = discover()
+    disabled = [n for n, _ in srcs.items() if not cfg.get("sources", {}).get(n, {}).get("enabled", True)]
+    for res in sorted(run_all("check", cfg), key=lambda r: r["name"]):
+        where = "private" if str(srcs[res["name"]]).startswith(str(HOME)) else "built-in"
+        msg = (res["out"].strip().splitlines() or [""])[0]
+        if res["status"] != "ok":
+            msg = res["err"].splitlines()[-1] if res["err"] else msg or res["status"]
+        print(f"  {res['name']:<12} {icon[res['status']]} {msg} {dim('(' + where + ')')}")
+    for n in disabled:
+        print(f"  {n:<12} ⚪ disabled in config.toml")
+
+    print(bold("\nSetup"))
+    if HOME.is_dir():
+        print(f"  private dir  ✅ {HOME}")
+    else:
+        print(f"  private dir  ⚪ {HOME} missing → agent-inbox init")
+    cpath = HOME / "config.toml"
+    print(f"  config       {'✅ ' + str(cpath) if cpath.exists() else '⚪ none (defaults) → agent-inbox init'}")
+    rp = rules_path()
+    rules = load_toml(rp).get("rule", [])
+    badl = [r for r in rules if r.get("level") not in LEVELS]
+    state = "❌" if badl else "✅"
+    print(f"  rules        {state} {len(rules)} rules in {rp}")
+    for r in badl:
+        print(f"               invalid level {r.get('level')!r}; use one of {', '.join(LEVELS)}")
+
+
+def cmd_init(_args):
+    HOME.mkdir(parents=True, exist_ok=True)
+    (HOME / "sources.d").mkdir(exist_ok=True)
+    for src, dst in (("config.example.toml", "config.toml"), ("rules.default.toml", "rules.toml")):
+        target = HOME / dst
+        if target.exists():
+            print(f"kept     {target}")
+        else:
+            shutil.copy(REPO_INBOX / src, target)
+            print(f"created  {target}")
+    print(f"ready    {HOME / 'sources.d'} (drop private adapters here; template: {REPO_INBOX / 'adapter-template'})")
+    print("next     edit config.toml, then run: agent-inbox doctor")
+
+
+def main():
+    args = sys.argv[1:]
+    if args and args[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    cmd = args[0] if args and not args[0].startswith("-") else "show"
+    rest = args[1:] if cmd != "show" or (args and args[0] == "show") else args
+    {"show": cmd_show, "doctor": cmd_doctor, "init": cmd_init}.get(
+        cmd, lambda _a: sys.exit(f"agent-inbox: unknown command {cmd!r} (try --help)")
+    )(rest)
+
+
+if __name__ == "__main__":
+    main()

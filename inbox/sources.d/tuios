@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# agent-inbox source: tuios agents that are blocked on you or finished and unread.
+# Contract: see inbox/README.md.
+set -uo pipefail
+
+command -v tuios >/dev/null || { echo "tuios not installed → brew install tuios" >&2; exit 3; }
+command -v jq >/dev/null || { echo "jq not installed → brew install jq" >&2; exit 3; }
+
+json=$(tuios list-agents --all-sessions --json 2>/dev/null) || {
+  echo "tuios daemon not reachable → start tuios" >&2; exit 3; }
+
+case "${1:-items}" in
+  check)
+    jq -r '"\(.agents | length) agents in \([.agents[].session] | unique | length) sessions"' <<<"$json"
+    ;;
+  items)
+    now_ns=$(($(date +%s) * 1000000000))
+    jq -c --argjson now "$now_ns" '
+      .agents[]
+      | select(.focused | not)
+      | (if (.needs_you or .state == "needs_input") then "blocked"
+         elif (.state == "done" and .finished_unread) then "finished"
+         else empty end) as $kind
+      | {
+          source: "tuios",
+          id: .window_id,
+          kind: $kind,
+          title: .name,
+          detail: ((.reason // "") as $r | (if $r != "" then $r else (.message // "" | split("\n")[0]) end)[0:120]),
+          action: "session \(.session) · pane \(.window_id[0:8])",
+          age_min: (if .agent_state_at > 0 then (($now - .agent_state_at) / 60000000000 | floor) else null end),
+          tags: [.session, .harness_id, .group] | map(select(. != null and . != "")),
+          hint: (if $kind == "blocked" then "now" else "done" end)
+        }' <<<"$json"
+    ;;
+  *) echo "usage: $0 check|items" >&2; exit 2;;
+esac

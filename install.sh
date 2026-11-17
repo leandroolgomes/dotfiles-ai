@@ -53,6 +53,7 @@ for d in "$DOTFILES"/claude/skills/*/; do d="${d%/}"; link "claude/skills/${d##*
 link vscode/settings.json      "$HOME/Library/Application Support/Code/User/settings.json"
 link ssh/config                "$HOME/.ssh/config"
 link bin/review-fanout         "$HOME/.local/bin/review-fanout"
+link bin/agent-inbox           "$HOME/.local/bin/agent-inbox"
 
 # tuios rewrites its own config (set-config, hooks), so seed it once instead of symlinking.
 TUIOS_CFG="$HOME/Library/Application Support/tuios/config.toml"

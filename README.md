@@ -20,6 +20,7 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 | | SSH (config only, never keys) | `ssh/config` |
 | Runtimes | mise (global Go, Node) | `mise-global/config.toml` |
 | AI | Claude Code | see below |
+| | `agent-inbox`: one queue of what needs you (blocked agents, reviews, red CI); pluggable sources | `bin/agent-inbox`, `inbox/` (see `inbox/README.md`) |
 | macOS | Opt-in preferences (not run by the installer) | `macos/defaults.sh` |
 | Packages | Homebrew formulae, casks and taps | `Brewfile` |
 
@@ -68,6 +69,26 @@ reviews and `test-runner` for failure-only test output. The skill list follows u
 
 The hooks are guardrails against accidents, not a security boundary. Not versioned on purpose:
 `~/.claude.json`, `settings.local.json`, history, projects, caches and tool-installed skills.
+
+### Agent inbox (`bin/agent-inbox`)
+
+One queue of what needs you: agents blocked on you or finished, review requests, red CI, and any
+source you connect later.
+
+```sh
+agent-inbox             # 🔴 needs you now · 🟡 today · ✅ done, ready to review · ⚪ FYI (counted)
+agent-inbox --all       # also list FYI items
+agent-inbox doctor      # which sources are connected, and the exact command to fix the rest
+agent-inbox init        # create the private overlay in ~/work-context/inbox/
+```
+
+- Built-in sources: `tuios` (blocked and finished agents in every session) and `github` (review
+  requests, red CI on `main` for the repos in `config.toml`; GitHub Enterprise via `hosts`).
+- Company sources (Jira, PagerDuty, internal tools) go in `~/work-context/inbox/sources.d/`, never in
+  this repo. Start from `inbox/adapter-template`; a source is any executable answering `check` and `items`.
+- `rules.toml` decides what counts as "needs me" (first match wins). Defaults: `inbox/rules.default.toml`.
+- No credentials are stored: sources use your own CLI logins (`gh auth login`) or the Keychain.
+- Contract and layout: `inbox/README.md`.
 
 ## Install
 
