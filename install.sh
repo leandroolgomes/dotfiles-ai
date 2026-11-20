@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Installs this dotfiles repo: packages (Brewfile) + symlinks into $HOME.
 # Idempotent. Existing files are moved to ~/.dotfiles-backup/<timestamp>/ first.
-# Usage: ./install.sh [--dry-run] [--no-packages]
+# Runs bin/dotfiles-check before linking anything and stops if it fails.
+# Usage: ./install.sh [--dry-run] [--no-packages] [--skip-checks]
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
-DRY=0; PACKAGES=1; BREW_FAILED=0
-for a in "$@"; do case "$a" in --dry-run) DRY=1;; --no-packages) PACKAGES=0;; esac; done
+DRY=0; PACKAGES=1; CHECKS=1; BREW_FAILED=0
+for a in "$@"; do case "$a" in --dry-run) DRY=1;; --no-packages) PACKAGES=0;; --skip-checks) CHECKS=0;; esac; done
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 run() { if ((DRY)); then echo "[dry-run] $*"; else "$@"; fi; }
@@ -36,6 +37,15 @@ if ((PACKAGES)); then
   run brew bundle --file="$DOTFILES/Brewfile" || { BREW_FAILED=1; echo "WARNING: some Brewfile packages failed (see output above); continuing."; }
 fi
 
+# Don't link a broken config into $HOME: hooks with a syntax error or a settings.json pointing at a
+# missing hook fail silently inside Claude Code.
+if ((CHECKS)); then
+  log "Checking the repo (bin/dotfiles-check)"
+  "$DOTFILES/bin/dotfiles-check" --quick || { echo "dotfiles-check failed; fix it or rerun with --skip-checks." >&2; exit 1; }
+fi
+# This repo's own pre-commit hook (runs dotfiles-check). Hooks aren't versioned by git, so point at .githooks/.
+run git -C "$DOTFILES" config core.hooksPath .githooks
+
 link ghostty/config            "$HOME/.config/ghostty/config"
 link tmux/tmux.conf            "$HOME/.config/tmux/tmux.conf"
 link starship/starship.toml    "$HOME/.config/starship.toml"
@@ -54,6 +64,9 @@ link vscode/settings.json      "$HOME/Library/Application Support/Code/User/sett
 link ssh/config                "$HOME/.ssh/config"
 link bin/review-fanout         "$HOME/.local/bin/review-fanout"
 link bin/agent-inbox           "$HOME/.local/bin/agent-inbox"
+link bin/dotfiles-check        "$HOME/.local/bin/dotfiles-check"
+link bin/skill-eval            "$HOME/.local/bin/skill-eval"
+link bin/issue-triage          "$HOME/.local/bin/issue-triage"
 
 # tuios rewrites its own config (set-config, hooks), so seed it once instead of symlinking.
 TUIOS_CFG="$HOME/Library/Application Support/tuios/config.toml"

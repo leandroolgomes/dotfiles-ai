@@ -20,6 +20,7 @@ brew "git-delta"
 brew "gh"
 brew "lazygit"
 brew "gitleaks"
+brew "shellcheck"
 brew "actionlint"
 
 # editor

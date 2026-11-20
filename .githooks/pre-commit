@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Repo pre-commit hook (enabled by install.sh: git config core.hooksPath .githooks).
+# Runs the quick local checks; gitleaks on staged changes runs separately via the Claude hook and `gitleaks git --staged`.
+set -euo pipefail
+repo="$(git rev-parse --show-toplevel)"
+"$repo/bin/dotfiles-check" --quick
+if command -v gitleaks >/dev/null; then gitleaks git --staged --no-banner --redact; fi

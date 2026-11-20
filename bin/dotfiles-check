@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# dotfiles-check: the hard checks for this repo, run locally (no CI needed).
+# Runs from the repo's pre-commit hook (.githooks/pre-commit) and from install.sh before linking.
+#
+# Usage: dotfiles-check [--quick]
+#   --quick   skip the slower checks (gitleaks)
+#
+# Checks: shellcheck on every bash script, claude/settings.json is valid and every hook it calls
+# exists in the repo, SKILL.md/agent frontmatter, every claude/**/tests/run.sh, gitleaks.
+# A missing tool is a warning, not a failure, so a fresh machine can still install.
+set -uo pipefail
+
+REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+QUICK=0; [[ "${1:-}" == --quick ]] && QUICK=1
+fail=0 warn=0
+step() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; fail=$((fail + 1)); }
+warn() { printf '  \033[33m!\033[0m %s\n' "$*"; warn=$((warn + 1)); }
+
+step "shellcheck"
+if command -v shellcheck >/dev/null; then
+  scripts=()
+  while IFS= read -r f; do
+    head -n1 "$f" | grep -Eq '^#!.*(bash|/sh)( |$)' && scripts+=("$f")
+  done < <(cd "$REPO" && find bin claude inbox macos install.sh .githooks -type f ! -path '*/node_modules/*' 2>/dev/null)
+  (cd "$REPO" && shellcheck -S warning "${scripts[@]}") || bad "shellcheck found problems (above)"
+else
+  warn "shellcheck not installed (brew install shellcheck)"
+fi
+
+step "claude/settings.json"
+settings="$REPO/claude/settings.json"
+if jq empty "$settings" 2>/dev/null; then
+  # Every $HOME/.claude/... hook command must exist in the repo and be executable.
+  while IFS= read -r cmd; do
+    path=${cmd%% *}
+    rel=${path#\$HOME/.claude/}
+    [[ "$rel" == "$path" ]] && continue   # not one of ours (tuios, printf, ...)
+    [[ -x "$REPO/claude/$rel" ]] || bad "settings.json calls $path but claude/$rel is missing or not executable"
+  done < <(jq -r '.hooks[]?[]?.hooks[]?.command // empty' "$settings")
+else
+  bad "claude/settings.json is not valid JSON"
+fi
+
+step "live ~/.claude links"
+# Tools (Claude Code, tuios) sometimes replace a symlink with a regular file; then the repo's hooks silently stop applying.
+for rel in settings.json CLAUDE.md hooks; do
+  live="$HOME/.claude/$rel"
+  [[ "$(readlink "$live" 2>/dev/null)" == "$REPO/claude/$rel" ]] && continue
+  if [[ -e "$live" ]]; then warn "$live is not a link to this repo (replaced by a tool?): diff it, then rerun install.sh"
+  else warn "$live is missing: run install.sh"; fi
+done
+for d in "$REPO"/claude/skills/*/; do
+  s=$(basename "$d")
+  [[ "$(readlink "$HOME/.claude/skills/$s" 2>/dev/null)" == "$REPO/claude/skills/$s" ]] || warn "$HOME/.claude/skills/$s is not linked to this repo: run install.sh"
+done
+
+step "skill and agent frontmatter"
+field() { awk -v k="$2" 'NR==1 && $0!="---" {exit} NR>1 && $0=="---" {exit} NR>1 && index($0, k": ")==1 {print substr($0, length(k)+3); exit}' "$1"; }
+for f in "$REPO"/claude/skills/*/SKILL.md; do
+  dir=$(basename "$(dirname "$f")")
+  [[ "$(head -n1 "$f")" == --- ]] || { bad "${f#"$REPO"/}: no frontmatter"; continue; }
+  [[ "$(field "$f" name)" == "$dir" ]] || bad "${f#"$REPO"/}: name must be '$dir'"
+  [[ -n "$(field "$f" description)" ]] || bad "${f#"$REPO"/}: missing description"
+done
+for d in "$REPO"/claude/skills/*/; do [[ -f "$d/SKILL.md" ]] || bad "${d#"$REPO"/}: no SKILL.md"; done
+for f in "$REPO"/claude/agents/*.md; do
+  [[ -n "$(field "$f" name)" && -n "$(field "$f" description)" ]] || bad "${f#"$REPO"/}: needs name and description"
+done
+
+step "tests"
+while IFS= read -r t; do
+  [[ -x "$t" ]] || { bad "${t#"$REPO"/} is not executable"; continue; }
+  "$t" || bad "${t#"$REPO"/} failed"
+done < <(find "$REPO/claude" -path '*/tests/run.sh' -type f | sort)
+
+if ((!QUICK)); then
+  step "gitleaks (public repo)"
+  if command -v gitleaks >/dev/null; then
+    gitleaks dir "$REPO" --no-banner --redact >/dev/null 2>&1 || bad "gitleaks found possible secrets: run 'gitleaks dir $REPO' to see them"
+  else
+    warn "gitleaks not installed (brew install gitleaks)"
+  fi
+fi
+
+echo
+if ((fail)); then printf "\033[31mdotfiles-check: %d problem(s)\033[0m\n" "$fail"; exit 1; fi
+printf '\033[32mdotfiles-check: ok\033[0m%s\n' "$( ((warn)) && echo " ($warn warning(s))")"
