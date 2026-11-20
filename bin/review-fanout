@@ -16,8 +16,10 @@
 #   --out        Where reviews and report.md go (default: $TMPDIR/review-fanout/<dir>-<timestamp>).
 #
 # Each reviewer runs as an interactive agent in its own tuios pane, so it shows in the agents tab
-# and you can answer it there. Reviewers may read the code but not change it: claude may write only
-# its review file; codex runs in the output directory with a workspace-write sandbox.
+# and you can answer it there. A finding counts as proven only with a command the reviewer ran and its
+# output; the rest are reported apart as unproven. Reviewers keep repros in the output directory and
+# must not leave changes in the code: claude may run any Bash command (the block-dangerous hook still
+# applies); codex runs in the output directory with a workspace-write sandbox.
 # The panes stay open afterwards for follow-up questions.
 set -euo pipefail
 
@@ -62,7 +64,7 @@ claude_model() {
 
 prompt_for() {
   cat <<EOF
-Review the code in $CODE. If it is a git repository with uncommitted changes or commits that are not on the default branch, focus on those; otherwise review the code as a whole. Look for correctness bugs, security issues, missing error handling and risky edge cases; skip style nits. Do not modify, create or delete any file under $CODE. ${FOCUS:+Extra focus: $FOCUS. }Write your complete review as markdown to $1: for each finding give a severity (high, medium or low), the location as file:line, the problem and a suggested fix. If you find nothing significant, write that. Write the file only once the review is complete, then reply DONE.
+Review the code in $CODE. If it is a git repository with uncommitted changes or commits that are not on the default branch, focus on those; otherwise review the code as a whole. Look for correctness bugs, security issues, missing error handling and risky edge cases; skip style nits. ${FOCUS:+Extra focus: $FOCUS. }Prove each finding by running something against the real code: a failing test, a repro script, or command output that shows the wrong behavior. Keep repro files under ${1%.md}-repro/; if a test has to sit next to the code, create it, run it and delete it, and leave $CODE exactly as you found it. Write your complete review as markdown to $1. For each finding give a severity (high, medium or low), the location as file:line, the problem, a suggested fix, and a Proof line: the exact command, the output it printed, and the output it should have printed. A finding you could not prove by a run gets "Proof: unproven" and the reason. If you find nothing significant, write that. Write the file only once the review is complete, then reply DONE.
 EOF
 }
 
@@ -125,8 +127,7 @@ for spec in "${SPECS[@]}"; do
     claude)
       args=()
       [[ -n "$model" ]] && args+=(--model "$(claude_model "$model")")
-      args+=(--add-dir "$OUT" --allowedTools "Write(/$OUT/**)" Read Grep Glob
-             "Bash(git diff:*)" "Bash(git log:*)" "Bash(git status:*)" "Bash(git show:*)")
+      args+=(--add-dir "$OUT" --allowedTools "Write(/$OUT/**)" Read Grep Glob Bash)
       cwd="$CODE";;
     codex)
       command -v codex >/dev/null || die "codex not found on PATH"
@@ -165,7 +166,9 @@ SUMMARY_PROMPT='You merge independent code reviews into one report. The input ho
 ## Summary
 3 to 5 sentences on the overall state and the most important risks.
 ## Findings
-Deduplicated and grouped under "### High", "### Medium", "### Low". For each finding: location (file:line), the problem, the suggested fix, and which reviewers raised it. Merge findings that describe the same problem.
+Only findings with a Proof line that names a command and shows output demonstrating the wrong behavior. Deduplicated and grouped under "### High", "### Medium", "### Low". For each finding: location (file:line), the problem, the suggested fix, the proof command with the key output lines, and which reviewers raised it. Merge findings that describe the same problem.
+## Unproven
+Findings marked "Proof: unproven", with no command, or whose output does not show the problem: one line each with location, problem, reviewers and why it is unproven. Write "None." if there are none.
 ## Disagreements
 Findings where reviewers contradict each other, or that only one reviewer raised and look doubtful. Write "None." if there are none.
 ## Promote to rule
