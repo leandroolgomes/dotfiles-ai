@@ -39,6 +39,23 @@ out=$("$SCRIPTS/collect.sh" --root "$WORK/empty"); rc=$?
 "$SCRIPTS/collect.sh" --root "$WORK/missing" >/dev/null 2>&1; rc=$?
 [[ $rc == 2 ]] && ok || bad "missing root should exit 2, got $rc"
 
+# Many sessions: the cap must not turn a long listing into a SIGPIPE exit.
+many="$WORK/many/-Users-x-dev-$(printf 'p%.0s' {1..80})"; mkdir -p "$many"
+for i in $(seq 1 700); do : >"$many/session-$(printf 'x%.0s' {1..40})-$i.jsonl"; done
+out=$("$SCRIPTS/collect.sh" --root "$WORK/many" 2>/dev/null); rc=$?
+[[ $rc == 0 && $(grep -c . <<<"$out") == 10 ]] && ok || bad "700 sessions: want exit 0 and 10 lines (per-project cap), got rc=$rc, $(grep -c . <<<"$out") lines"
+
+# One busy project must not push out the others; truncation is reported on stderr.
+busy="$WORK/busy"; mkdir -p "$busy/-Users-x-dev-quiet" "$busy/-Users-x-dev-busy"
+: >"$busy/-Users-x-dev-quiet/q.jsonl"; touch -t "$(date -v-1d '+%Y%m%d%H%M')" "$busy/-Users-x-dev-quiet/q.jsonl"
+for i in 1 2 3 4 5; do : >"$busy/-Users-x-dev-busy/b$i.jsonl"; done
+out=$("$SCRIPTS/collect.sh" --root "$busy" --max 3 --per-project 2 2>"$WORK/err")
+grep -q 'q.jsonl' <<<"$out" && ok || bad "--per-project 2 should keep the quiet project: $out"
+[[ $(grep -c . <<<"$out") == 3 ]] && ok || bad "--max 3 should list 3, got: $out"
+grep -q 'kept 3 of 6' "$WORK/err" && ok || bad "truncation should be reported on stderr, got: $(cat "$WORK/err")"
+newest=$("$SCRIPTS/collect.sh" --root "$busy" --max 1 2>/dev/null | cut -f2)
+[[ "$newest" == "$busy/-Users-x-dev-busy/"* ]] && ok || bad "--max 1 should keep the newest transcript, got: $newest"
+
 echo "dream: target-ok.sh"
 CLONE="$(cd "$SCRIPTS/../../../.." && pwd -P)"
 home="$WORK/home" wc="$WORK/wc"
@@ -61,6 +78,12 @@ expect 1 "$home/.claude/CLAUDE.md"
 expect 1 "$home/work-context/rules.d/x.rules"
 expect 1 "$CLONE/claude/hooks/ban-patterns.rules"
 expect 1 "$home/.claude/skills/SKILL.md"
+# Dangling links into the clone (a shipped file or skill removed upstream) must still be refused.
+mkdir -p "$home/.claude/rules"
+ln -s "$CLONE/claude/rules-gone/x.md" "$home/.claude/rules/dangling.md"
+expect 1 "$home/.claude/rules/dangling.md" "$CLONE"
+ln -s "$CLONE/claude/skills/not-yet" "$home/.claude/skills/ghost"
+expect 1 "$home/.claude/skills/ghost/SKILL.md" "$CLONE"
 
 echo "dream: $pass passed, $fail failed"
 ((fail == 0))
