@@ -1,5 +1,5 @@
 {
-  "model": "sonnet",
+  "model": "opus",
   "statusLine": {
     "type": "command",
     "command": "npx -y @owloops/claude-powerline@latest --style=powerline"
@@ -239,5 +239,13 @@
         ]
       }
     ]
+  },
+  "modelSettings": {
+    "claude-sonnet-5-5": {
+      "autoCompactWindow": 400000
+    },
+    "claude-opus-5-5": {
+      "autoCompactWindow": 400000
+    }
   }
 }
