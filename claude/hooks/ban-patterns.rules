@@ -1,0 +1,17 @@
+# Patterns agents use to cheat checks or leave noise. Read by ban-patterns.sh.
+# Format: scope<TAB>extended-regex (case-insensitive)<TAB>message
+#   scope = code  → text an Edit/Write adds to a code file (not .md/.txt); only NEW matches block
+#   scope = bash  → a Bash command
+# Company-specific rules: same format in ~/work-context/rules.d/*.rules (never in this public repo).
+
+code	//[[:space:]]*nolint	Disables a Go linter. Fix the finding instead
+code	eslint-disable	Disables ESLint. Fix the finding instead
+code	@ts-(ignore|nocheck)	Silences the TypeScript compiler. Fix the type instead
+code	#[[:space:]]*(type:[[:space:]]*ignore|noqa)	Silences a Python checker. Fix the finding instead
+code	shellcheck[[:space:]]+disable=	Disables ShellCheck. Fix the finding instead
+code	(^|[^a-z0-9_])t\.skip(now|f)?\(	Skips a Go test. Fix the test or the code instead
+code	(describe|it|test)\.(only|skip)\(	Focuses or skips JS tests. Remove .only/.skip
+code	@disabled([^a-z]|$)	Disables a JUnit test. Fix the test or the code instead
+code	(//|#|/\*|^[[:space:]]*\*).*(as requested|per (the )?user|the user (said|asked|wants)|as discussed|previously (we|this|it)|changed (from|to) |no longer (uses|needed)|(added|updated|fixed) by (claude|the agent))	Comment narrates history or the conversation. Comments explain the code as it is; history belongs in the commit message
+bash	git[[:space:]]+add[[:space:]]+(-A|--all|\.)([[:space:]]|$)	Blind staging. Stage the specific files of this change
+bash	git[[:space:]]+(commit|push)[^|;&]*--no-verify	Skips git hooks. Fix what the hook reports instead

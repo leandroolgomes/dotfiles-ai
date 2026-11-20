@@ -61,6 +61,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/require-checks.sh",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -109,6 +118,16 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/ban-patterns.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PermissionRequest": [
@@ -129,6 +148,16 @@
             "command": "tuios agent-hook claude-code --integration 3",
             "timeout": 5,
             "type": "command"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/format-on-edit.sh",
+            "timeout": 60
           }
         ]
       }

@@ -1,0 +1,25 @@
+# expected-exit<TAB>tool<TAB>args...   Bash: command | Edit: file, old, new | Write: file, content
+2	Bash	git add -A
+2	Bash	git add --all
+2	Bash	git add .
+2	Bash	git commit --no-verify -m wip
+0	Bash	git add src/main.go README.md
+0	Bash	git commit -m "Fix retry"
+2	Edit	x.go	x := f()	x := f() //nolint:errcheck
+2	Edit	x.ts	const a = b	// @ts-ignore\nconst a = b
+2	Edit	x.js	a()	// eslint-disable-next-line\na()
+2	Edit	x_test.go	func TestA(t *testing.T) {	func TestA(t *testing.T) {\n\tt.Skip("flaky")
+2	Edit	a.test.ts	it("works", () => {	it.only("works", () => {
+2	Edit	A.java	@Test	@Disabled\n@Test
+2	Edit	x.py	import os	import os  # noqa
+2	Edit	run.sh	echo hi	# shellcheck disable=SC2086\necho hi
+2	Edit	x.go	return nil	// Changed to return nil as requested\nreturn nil
+2	Edit	x.ts	retry()	// the user said we should retry here\nretry()
+0	Edit	x.go	x := f() //nolint:errcheck\ny := 1	x := f() //nolint:errcheck\ny := 2
+0	Edit	x.go	return nil	// Retry with backoff: the API rate-limits bursts.\nreturn nil
+0	Edit	x_test.go	t.Run("a", f)	t.Run("b", f)
+0	Edit	NOTES.md	x	Use //nolint only as requested
+0	Write	docs/guide.txt	it.only( is banned
+2	Write	tool	#!/usr/bin/env bash\n# shellcheck disable=SC2086\necho $1
+0	Write	tool	#!/usr/bin/env bash\necho "$1"
+0	Read	x.go
