@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# agent-inbox source: reports from bin/issue-triage waiting for you to read (acked with `issue-triage ack`).
+# Contract: see inbox/README.md.
+set -uo pipefail
+items="${XDG_STATE_HOME:-$HOME/.local/state}/issue-triage/items.jsonl"
+[[ -f "$items" ]] || { echo "not set up → issue-triage run --repo OWNER/NAME (see bin/issue-triage --help)" >&2; exit 3; }
+case "${1:-items}" in
+  check) echo "$(grep -c . "$items" || true) report(s) to read";;
+  items) cat "$items";;
+  *) echo "usage: $0 check|items" >&2; exit 2;;
+esac
