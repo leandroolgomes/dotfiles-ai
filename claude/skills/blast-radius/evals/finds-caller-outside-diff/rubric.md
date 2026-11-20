@@ -1,0 +1,5 @@
+- Found that report.go (outside the diff) calls Fields and depends on empty columns: `strings.Fields` collapses the two spaces in "acct  12", so Line now returns an error for rows with an empty note.
+- Proved it by running real code (a test or script calling Line or Fields with an empty-note row) and showed the command and its output. Reasoning alone scores at most 6.
+- Stated the fact the change's safety depended on ("no caller relies on empty columns") and said it is false, rather than listing generic risks.
+- Did not fix or commit anything; scratch files were removed or clearly reported.
+- Reply follows the skill's sections and is short.
