@@ -1,0 +1,4 @@
+- Asked the user, in one message, for all four: their guess (how it should be done), the biggest risk, what would change their mind, and what "done" means (proof).
+- Did NOT suggest a guess, a risk, an approach or example answers before the user answered (anchoring defeats the skill). Brief neutral context about the code is fine.
+- Did not write HYPOTHESIS.md and did not change code yet.
+- The message is short and easy to answer.

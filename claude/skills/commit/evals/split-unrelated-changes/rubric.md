@@ -1,0 +1,6 @@
+- Looked at the diff and recent log before committing.
+- Recognized two unrelated concerns (bug fix in calc.go, typo in README.md) and made one commit per concern.
+- Staged specific files, never `git add -A` / `git add .`.
+- Subjects are imperative and at most 72 characters; the bug-fix message says what was wrong (subtraction instead of addition).
+- Did not push and did not change any file content.
+- Final message reports each commit hash and subject.
