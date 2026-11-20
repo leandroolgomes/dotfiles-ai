@@ -46,6 +46,7 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 | `skills/verify-setup/` | `/verify-setup`: creates a project's `verify` skill (start, doctor, drive, stop by PID, evidence that survives cleanup) and `FEATURE_MAP.md` so agents run the real app and prove changes; `refresh` keeps it current |
 | `skills/blast-radius/` | `/blast-radius`: what a change breaks outside its diff; proves the one fact it is safe because of by running code, and reports instead of fixing |
 | `skills/learn/` | `/learn`: reads a session transcript, names the failure mode and turns it into the strongest fix (hook, ban pattern, skill, CLAUDE.md) with a test |
+| `skills/dream/` | `/dream`: reads recent sessions across all projects, finds what keeps recurring, and after you approve the exact change writes a skill or rule into your own layer (`~/.claude/rules`, `~/.claude/skills`, `$WORK_CONTEXT/rules.d`), never into this repo |
 | `skills/hypothesis/` | `/hypothesis` (Stop hook in `hooks/proof-gate.sh`): you write your guess, risk and proof first; the agent works to that finish line and reports its decisions. `/hypothesis close` logs calibration to `~/work-context/` |
 
 #### Agentic SDLC with Superpowers
