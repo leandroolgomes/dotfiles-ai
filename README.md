@@ -43,7 +43,8 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 | `agents/code-reviewer.md` | Read-only reviewer for recent diffs |
 | `agents/test-runner.md` | Runs tests and returns only failures |
 | `skills/commit/` | `/commit`: one commit per concern |
-| `skills/verify-setup/` | `/verify-setup`: creates a project's `verify` skill and `FEATURE_MAP.md` so agents run the real app and prove changes; `refresh` keeps it current |
+| `skills/verify-setup/` | `/verify-setup`: creates a project's `verify` skill (start, doctor, drive, stop by PID, evidence that survives cleanup) and `FEATURE_MAP.md` so agents run the real app and prove changes; `refresh` keeps it current |
+| `skills/blast-radius/` | `/blast-radius`: what a change breaks outside its diff; proves the one fact it is safe because of by running code, and reports instead of fixing |
 | `skills/learn/` | `/learn`: reads a session transcript, names the failure mode and turns it into the strongest fix (hook, ban pattern, skill, CLAUDE.md) with a test |
 | `skills/hypothesis/` | `/hypothesis` (Stop hook in `hooks/proof-gate.sh`): you write your guess, risk and proof first; the agent works to that finish line and reports its decisions. `/hypothesis close` logs calibration to `~/work-context/` |
 
@@ -93,8 +94,10 @@ review-fanout --reviewers claude:opus,codex --code-path ~/dev/api --focus "the r
 ```
 
 - Supported reviewers: `claude[:model]`, `codex[:model]`. `sonnet-5.5` becomes `claude-sonnet-5-5`.
-- Reviewers can read the code but not change it: Claude may write only its review file; Codex runs
-  in the output directory with a `workspace-write` sandbox.
+- Each finding needs proof from a run: the command, its output and the output it should have given.
+  The report lists findings without one under "Unproven". Reviewers keep repros in the output directory
+  and must leave the code as they found it: Claude may run any Bash command (`block-dangerous` still
+  applies); Codex runs in the output directory with a `workspace-write` sandbox.
 - Codex starts with the output directory trusted. Claude asks to trust a directory it has not seen
   before; answer it once in the agents tab.
 - Output: one `<reviewer>.md` per agent plus `report.md` in `$TMPDIR/review-fanout/<dir>-<timestamp>`
