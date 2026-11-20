@@ -12,6 +12,6 @@ grep -Eq 'git +push[^|;&]*( -f( |$)|--force( |$))' <<<"$cmd" && block "git push 
 grep -Eqi '(drop +(table|database|schema)|truncate +table)' <<<"$cmd" && block "destructive SQL"
 grep -Eq 'terraform +(destroy|apply +.*-auto-approve)' <<<"$cmd" && block "terraform destroy/auto-approve"
 grep -Eq 'gh +repo +delete' <<<"$cmd" && block "gh repo delete"
-grep -Eq '(curl|wget)[^|;&]*\|[^|;&]*(sh|bash|zsh)( |$)' <<<"$cmd" && block "piping a download into a shell"
+grep -Eq '(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(sh|bash|zsh)([[:space:]]|$)' <<<"$cmd" && block "piping a download into a shell"
 grep -Eq 'chmod +-R +777' <<<"$cmd" && block "chmod -R 777"
 exit 0
