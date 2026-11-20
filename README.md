@@ -20,7 +20,11 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 | | SSH (config only, never keys) | `ssh/config` |
 | Runtimes | mise (global Go, Node) | `mise-global/config.toml` |
 | AI | Claude Code | see below |
+| | `review-fanout`: multi-agent code review in tuios panes | `bin/review-fanout` (linked to `~/.local/bin/`) |
 | | `agent-inbox`: one queue of what needs you (blocked agents, reviews, red CI); pluggable sources | `bin/agent-inbox`, `inbox/` (see `inbox/README.md`) |
+| | `skill-eval`: unit tests for skills, judged by a different model | `bin/skill-eval`, `claude/skills/*/evals/` |
+| | `issue-triage`: unattended agent that triages new GitHub issues into the inbox (opt-in) | `bin/issue-triage` |
+| Repo checks | `dotfiles-check`: shellcheck, settings, frontmatter, hook tests, gitleaks; runs on pre-commit and install | `bin/dotfiles-check`, `.githooks/` |
 | macOS | Opt-in preferences (not run by the installer) | `macos/defaults.sh` |
 | Packages | Homebrew formulae, casks and taps | `Brewfile` |
 
@@ -28,15 +32,20 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 
 | File | Purpose |
 |---|---|
-| `CLAUDE.md` | Global instructions (English, concise; safety rules, environment, stack, working principles) |
+| `CLAUDE.md` | Global instructions (English, concise; safety rules, environment, stack, working principles). Each rule is tagged with the hook that enforces it, if any |
 | `settings.json` | Model, statusline, enabled plugins, hooks (notifications, tuios, safety) |
 | `hooks/block-dangerous.sh` | Blocks destructive Bash commands (`rm -rf ~`, force-push, `DROP TABLE`, `curl \| sh`, ...) |
 | `hooks/gitleaks-commit.sh` | Runs `gitleaks` on staged changes before `git commit` |
-| `hooks/hypothesis-proof-gate.sh` | Stop hook: with an active `HYPOTHESIS.md`, blocks "done" until each proof item has evidence and the report lists decisions |
+| `hooks/ban-patterns.sh` + `.rules` | Blocks edits that add lint suppressions, skipped/focused tests or comments that narrate history, and `git add -A`/`--no-verify`. Only new matches block |
+| `hooks/require-checks.sh` | Stop hook: if code changed and no test/lint/build/verify ran after the last edit, blocks once and asks for the checks |
+| `hooks/format-on-edit.sh` | After each edit, runs the repo's own formatter and linter (gofmt/goimports, prettier, eslint, ruff, shellcheck...) and returns errors |
+| `hooks/tests/` | Table-driven tests for every hook (`run.sh`, `*.cases`) |
 | `agents/code-reviewer.md` | Read-only reviewer for recent diffs |
 | `agents/test-runner.md` | Runs tests and returns only failures |
-| `skills/commit/` | `/commit` skill |
-| `skills/hypothesis/` | `/hypothesis`: you write your guess, risk and proof first; the agent works to that finish line and reports its decisions. `/hypothesis close` logs calibration to `~/work-context/` |
+| `skills/commit/` | `/commit`: one commit per concern |
+| `skills/verify-setup/` | `/verify-setup`: creates a project's `verify` skill and `FEATURE_MAP.md` so agents run the real app and prove changes; `refresh` keeps it current |
+| `skills/learn/` | `/learn`: reads a session transcript, names the failure mode and turns it into the strongest fix (hook, ban pattern, skill, CLAUDE.md) with a test |
+| `skills/hypothesis/` | `/hypothesis` (Stop hook in `hooks/proof-gate.sh`): you write your guess, risk and proof first; the agent works to that finish line and reports its decisions. `/hypothesis close` logs calibration to `~/work-context/` |
 
 #### Agentic SDLC with Superpowers
 
@@ -72,6 +81,26 @@ reviews and `test-runner` for failure-only test output. The skill list follows u
 The hooks are guardrails against accidents, not a security boundary. Not versioned on purpose:
 `~/.claude.json`, `settings.local.json`, history, projects, caches and tool-installed skills.
 
+### Multi-agent review (`bin/review-fanout`)
+
+Fans a code review out to several agents, each in its own tuios pane (visible in the agents tab, where
+you answer them if they ask), waits for all of them, then merges the reviews into one report with
+Claude Haiku.
+
+```sh
+review-fanout --reviewers claude:sonnet-5.5,codex:sol-6.1           # review the current directory
+review-fanout --reviewers claude:opus,codex --code-path ~/dev/api --focus "the retry logic"
+```
+
+- Supported reviewers: `claude[:model]`, `codex[:model]`. `sonnet-5.5` becomes `claude-sonnet-5-5`.
+- Reviewers can read the code but not change it: Claude may write only its review file; Codex runs
+  in the output directory with a `workspace-write` sandbox.
+- Codex starts with the output directory trusted. Claude asks to trust a directory it has not seen
+  before; answer it once in the agents tab.
+- Output: one `<reviewer>.md` per agent plus `report.md` in `$TMPDIR/review-fanout/<dir>-<timestamp>`
+  (or `--out`). The script prints the report path. Reviewer panes stay open for follow-up questions.
+- Options: `--session` (default: current tuios session), `--timeout` minutes (default 30).
+
 ### Work context (`~/work-context/`, private)
 
 This repo is public and generic. Everything about your company (conventions, incidents, internal
@@ -82,7 +111,8 @@ here. Keep it in a private git repo or other company-approved storage.
 ~/work-context/
   inbox/            config.toml, rules.toml, sources.d/   ← agent-inbox (agent-inbox init creates it)
   standards/        team conventions                       ← /hypothesis proposes proof items from these
-  incidents/        one rule per postmortem                ← /hypothesis proposes proof items from these
+  incidents/        one rule per postmortem                ← /hypothesis proposes proof items from these; /learn adds
+  rules.d/          *.rules, check-commands.txt            ← company ban patterns and check commands for the hooks
   hypotheses/       closed HYPOTHESIS.md files             ← /hypothesis close
   calibration.md    one line per closed hypothesis         ← /hypothesis close
 ```
@@ -129,10 +159,50 @@ finish line, and you read the agent's decisions instead of the whole diff.
    proof items you can check with a command, and writes `HYPOTHESIS.md` at the git root (globally git-ignored).
 2. The agent works toward that proof and logs every decision you didn't specify, flagging contract changes with ⚠️.
 3. Before stopping it fills `HYPOTHESIS.md`: evidence under each proof item (or `[!]` with a reason), "Hypothesis vs.
-   what I did" and "Decisions you didn't make". The `hypothesis-proof-gate.sh` Stop hook blocks "done" while
+   what I did" and "Decisions you didn't make". The `proof-gate.sh` Stop hook (in the skill's `hooks/`) blocks "done" while
    that is missing; it nudges once per stop, so the agent can still stop to ask you something.
 4. `/hypothesis close` records whether your guess and risk were right. Over time `calibration.md` shows where
    your instincts are reliable.
+
+## Enforcement layers
+
+Rules only hold if something checks them. From strongest to weakest:
+
+| Layer | Where | Fails how |
+|---|---|---|
+| Types, compiler, lint, tests, CI | each project (the company owns its CI) | build is red |
+| Claude hooks | `claude/hooks/` here + `~/work-context/rules.d/` | the tool call or the stop is blocked |
+| Skills | `claude/skills/`, a project's `.claude/skills/verify` | the agent may forget |
+| CLAUDE.md | `claude/CLAUDE.md` | the agent may forget |
+
+Hooks are the hard layer you carry between companies: they use each repo's own formatter, linter and test
+commands, so they adapt to whatever CI the company has. Company-specific rules go in `~/work-context/rules.d/`:
+
+```
+~/work-context/rules.d/acme.rules            # scope<TAB>regex<TAB>message, same as claude/hooks/ban-patterns.rules
+code	useEffect\(	useEffect is banned here; use the data hooks in src/data
+~/work-context/rules.d/check-commands.txt    # extra commands that count as checks for require-checks (one regex per line)
+acme-ci( |$)
+```
+
+The loop that keeps it growing: a review comment or a bad session → `/learn` (or the "Promote to rule" section of
+`review-fanout`) → the strongest rule that works, with a test → `dotfiles-check`. Skills get the same treatment:
+`skill-eval --skill X --min-score 9` scores them on eval cases, and you edit until they pass.
+
+Disable a hook for one session: `CLAUDE_REQUIRE_CHECKS=0` or `CLAUDE_FORMAT_ON_EDIT=0`.
+
+### Unattended triage (`bin/issue-triage`, opt-in)
+
+```sh
+issue-triage run --repo me/api --dry-run                    # what it would pick up
+issue-triage run --repo me/api --label bug --limit 3        # triage now; reports appear in agent-inbox
+issue-triage schedule --every 60 -- run --repo me/api       # LaunchAgent, runs outside tuios
+issue-triage ack me/api#42                                  # done reading a report
+```
+
+For each new issue it runs `claude -p` in a clean clone, reproduces with the repo's `verify` skill if there is one,
+checks whether the default branch already fixed it, and writes a report. It never changes code and only comments
+on the issue with `--comment`. Turn it on after you trust the `verify` skill: watch a few local runs first.
 
 ## Install
 
@@ -142,14 +212,17 @@ cd ~/dev/dotfiles-ai
 ./install.sh --dry-run        # preview, changes nothing
 ./install.sh                  # packages + symlinks
 ./install.sh --no-packages    # symlinks only (skip brew bundle)
+./install.sh --skip-checks    # link even if dotfiles-check fails (not recommended)
 ```
 
 `install.sh` is idempotent and macOS-only. It:
 1. Runs `brew bundle` on the `Brewfile` (unless `--no-packages`).
-2. Symlinks each config into `$HOME`. Existing files are moved to `~/.dotfiles-backup/<timestamp>/` first.
-3. Adds one line to `~/.zshrc` that sources `zsh/zshrc` (your `~/.zshrc` stays yours).
-4. Seeds the tuios config once (tuios rewrites its own file).
-5. Installs VS Code extensions (if `code` is on PATH) and tmux plugins (TPM).
+2. Runs `bin/dotfiles-check --quick` and stops if it fails, then points this repo's git hooks at `.githooks/`
+   (pre-commit runs `dotfiles-check` and `gitleaks` on staged changes).
+3. Symlinks each config into `$HOME`. Existing files are moved to `~/.dotfiles-backup/<timestamp>/` first.
+4. Adds one line to `~/.zshrc` that sources `zsh/zshrc` (your `~/.zshrc` stays yours).
+5. Seeds the tuios config once (tuios rewrites its own file).
+6. Installs VS Code extensions (if `code` is on PATH) and tmux plugins (TPM).
 
 Optional, after reviewing it: `./macos/defaults.sh` for keyboard, Finder, Dock and screenshot preferences.
 
@@ -159,5 +232,5 @@ breaks, `git status` here will show it.
 
 ## Secrets
 
-The repo is private, but nothing secret belongs in it: no SSH keys, tokens, `.env` files or auth files
+The repo is public, so nothing secret belongs in it: no SSH keys, tokens, `.env` files or auth files
 (see `.gitignore`). Run `gitleaks dir .` before pushing.
