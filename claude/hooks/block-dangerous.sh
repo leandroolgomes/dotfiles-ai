@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash): block clearly destructive commands (exit 2 = block, stderr goes to Claude).
 # Guardrail against accidents, not a security boundary: plain pattern matching can be bypassed.
-cmd="$(jq -r '.tool_input.command // empty' 2>/dev/null)"
+# Fail closed: if jq is missing or can't parse the input, block instead of letting everything through.
+cmd="$(jq -r '.tool_input.command // empty' 2>/dev/null)" || { echo "block-dangerous.sh: jq failed; cannot inspect command. Install jq." >&2; exit 2; }
 [[ -z "$cmd" ]] && exit 0
 
 block() { echo "Blocked by block-dangerous.sh: $1. Ask the user to run it themselves if intended." >&2; exit 2; }
