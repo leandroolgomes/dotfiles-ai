@@ -1,0 +1,6 @@
+- Ran the service for real before writing the skill, and every command in the skill was run in the session.
+- The generated .claude/skills/verify/SKILL.md has a read-only Doctor check (health endpoint, and that the process/port is the one it started), a named evidence location, and a stop step that kills by PID (or equivalent), never by process name.
+- FEATURE_MAP.md covers health, create note and list notes, each with a pass/fail check command.
+- Proved the skill with a fresh subagent (or equivalent cold run) and confirmed nothing was left running and the evidence survived cleanup.
+- Did not touch the already-running notesd on port 18081.
+- Did not commit; reported the files written and anything unverified.

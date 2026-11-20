@@ -22,8 +22,8 @@ The `require-checks` Stop hook counts using the `verify` skill as a check.
 1. **Find the app type and entry points.** Read the README, Makefile/justfile, package.json scripts, mise tasks,
    docker-compose, `cmd/` and `main` packages, CI config. Pick the recipe(s) from `recipes/` next to this file:
    `go-service.md`, `cli.md`, `web-playwright.md`. A repo can need more than one.
-2. **Run it for real before writing anything.** Start the app the way the recipe says, hit one real path, read
-   the logs, stop it cleanly. Every command you write in the skill must have been run once in this session.
+2. **Run it for real before writing anything.** Start the app the way the recipe says, find a read-only
+   Doctor check (process up, right build, port is ours), hit one real path, read the logs, stop it cleanly. Every command you write in the skill must have been run once in this session.
    If a step needs something you can't get (credentials, a VPN, a paid service), stop and ask the user
    how they run it locally; don't invent a mock and call it verification.
 3. **Build the feature map** from the code, not from guesses: routes/handlers, CLI commands, queue consumers,
@@ -33,7 +33,9 @@ The `require-checks` Stop hook counts using the `verify` skill as a check.
 4. **Write the skill** from `templates/verify-SKILL.md`, filling in the real commands. Keep it short: the
    map holds the detail.
 5. **Prove the skill works**: in a fresh subagent (no context from this session), ask it to verify one feature
-   from the map using only the skill. Fix whatever it trips on, then report what it ran.
+   from the map using only the skill: start, doctor, drive, capture evidence, clean up. Then check that
+   nothing is left running and the evidence survived the cleanup. Fix whatever it trips on (run the cleanup
+   after every failed attempt too), then report what it ran.
 6. Report: files written, the features mapped, anything `unverified:` and why. Don't commit; suggest the user
    commit `.claude/skills/verify/` so the whole team and cloud agents get it.
 
@@ -53,6 +55,12 @@ Run when features changed, or when an agent got lost using the map.
 - A verification step must observe real behavior (HTTP response, process output, DB row, screenshot,
   trace). "It compiles" or "the unit tests pass" is not verification.
 - Prefer commands with a clear pass/fail (`curl -fsS ... | jq -e '.status == "ok"'`) over output a human reads.
+- Every check ends VERIFIED, NOT VERIFIED or INCONCLUSIVE. Inconclusive is not a pass.
+- Stop only what you started (PID file, container name). Never `pkill`/`killall` by name: that can kill the
+  user's own instance.
+- A dry-run or test mode is trusted only after observing what it skips (network, files, git refs).
+- If you proved the skill in a stand-in (a container instead of the real target), list the steps the target
+  won't get from it; they stay `unverified:`.
 - Never point verification at production or shared environments. Local, a container, or a dev/test
   stack the user named.
 - No secrets in the skill or map. Reference where they come from (`aws sso login`, `.env.example`).
