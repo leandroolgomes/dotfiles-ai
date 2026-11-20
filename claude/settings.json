@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/hypothesis-proof-gate.sh",
+            "command": "$HOME/.claude/skills/hypothesis/hooks/proof-gate.sh",
             "timeout": 10
           }
         ]

@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 A hypothesis keeps the user doing the thinking: their guess comes first, proof is the finish line, and they read
 the agent's decisions instead of the whole diff. `HYPOTHESIS.md` lives at the git root (globally git-ignored).
-A Stop hook (`hypothesis-proof-gate.sh`) blocks "done" while `status: active` and proof is missing.
+A Stop hook (`hooks/proof-gate.sh` in this skill) blocks "done" while `status: active` and proof is missing.
 
 ## `/hypothesis <task>`: open a hypothesis
 
@@ -51,7 +51,7 @@ Show proof progress (`n/m` checked, `[!]` count) and the decisions so far.
    Propose one from the report, but the user decides.
 2. Append one line to `~/work-context/calibration.md` (create it with a `# Calibration` heading if missing):
    `YYYY-MM-DD  <slug>  guess: ✅|〰️|❌  risk: ✅|〰️|❌  missed: <short>`
-3. Set `status: closed`, move the file to `~/work-context/hypothesiss/YYYY-MM-DD-<slug>.md` and confirm the path.
+3. Set `status: closed`, move the file to `~/work-context/hypotheses/YYYY-MM-DD-<slug>.md` and confirm the path.
 
 ## Template
 
