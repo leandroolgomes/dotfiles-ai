@@ -30,15 +30,18 @@ write nothing.
 
 ## 1. Collect
 
-`scripts/collect.sh --days DAYS [--root DIR]` lists `project<TAB>path`, newest first. Nothing listed: say so and
-stop. Read each one through `~/.claude/skills/learn/scripts/digest.sh <path>`, never the raw JSONL; open the
+`scripts/collect.sh --days DAYS [--root DIR]` lists `project<TAB>path`, newest first, at most 10 per project
+and 40 in total (`--per-project N`, `--max N`). If it reports on stderr that it dropped transcripts, tell the
+user. Nothing listed: say so and stop. Read each one through `~/.claude/skills/learn/scripts/digest.sh <path>`, never the raw JSONL; open the
 raw transcript only around a moment you will quote.
 
 ## 2. Find patterns
 
 Look for: user corrections ("no", "I said", "always", "never"), the failure modes in the table of
 `~/.claude/skills/learn/SKILL.md`, and the same multi-step workflow done by hand in several sessions (a skill
-candidate). Group occurrences that are the same lesson. Keep only groups with 2+ occurrences; rank by the
+candidate). An occurrence is the user's own words or the agent's own action in that session: skip this
+session and earlier `/dream` or `/learn` sessions, whose text only quotes other sessions. Group occurrences
+that are the same lesson. Keep only groups with 2+ occurrences; rank by the
 number of projects, then by count. Say what you dropped for having one occurrence.
 
 ## 3. Check what already covers it
@@ -50,12 +53,14 @@ stronger (a soft rule that keeps breaking becomes a ban pattern or a hook sugges
 
 ## 4. Show the candidates
 
-One block per candidate, strongest first:
+First run `target-ok.sh` on each candidate's destination. A candidate without that output is not ready to
+show. Then one block per candidate, strongest first:
 - the lesson in one line
 - evidence: each occurrence as `project · session id · quoted user words / agent action`
 - the fix and why not a stronger one (ladder from `/learn`: ban pattern or check > skill > rule)
-- the destination from the table as an absolute path, already passed through `target-ok.sh`
+- the destination from the table as an absolute path, and the `target-ok.sh` output for it (run it now)
 - the proposed content itself (the exact line or file, no `...`)
+- how it will be proven once written (step 6)
 
 A ban pattern is a case-insensitive extended regex with no lookahead. Before proposing one, test it with
 `grep -Ei` against the commands in the evidence: it must match the bad ones and not the corrected ones. If the

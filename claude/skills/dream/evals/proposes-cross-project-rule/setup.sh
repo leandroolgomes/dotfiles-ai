@@ -19,5 +19,10 @@ pr_session "Fix header layout on mobile" > projects/-Users-x-dev-web/b.jsonl
   jq -cn '{type:"assistant", message:{content:[{type:"text", text:"Added sumLines() with variable acc."}]}}'
   jq -cn '{type:"user", message:{content:"rename acc to total"}}'
 } > projects/-Users-x-dev-api/c.jsonl
+# An earlier /dream run that quotes the one-off: a quote of a correction is not a second occurrence.
+{
+  jq -cn '{type:"user", message:{content:"/dream"}}'
+  jq -cn '{type:"assistant", message:{content:[{type:"text", text:"Candidate: in -Users-x-dev-api the user said \"rename acc to total\". Seen once, so dropped."}]}}'
+} > projects/-Users-x-dev-web/d.jsonl
 git add projects && git commit -qm "Session logs"
 touch .start
