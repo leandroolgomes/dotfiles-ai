@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# agent-inbox source: agents in the herdr app (herdr-core / hc) that are blocked on you or finished unseen.
+# The `herdr` source covers the separate herdr CLI server. Contract: see inbox/README.md.
+set -uo pipefail
+
+hc=$(command -v herdr-core || command -v hc) || {
+  echo "herdr-core not installed → install the herdr app" >&2; exit 3; }
+command -v jq >/dev/null || { echo "jq not installed → brew install jq" >&2; exit 3; }
+
+ls_json=$("$hc" ls --json 2>/dev/null) || {
+  echo "herdr-core server not reachable → open the herdr app (or: herdr-core server start)" >&2; exit 3; }
+
+case "${1:-items}" in
+  check)
+    jq -r '[.terminals[] | select(.agent != null and .agent != "zsh" and .agent != "bash")]
+           | "\(length) agents in \([.[].where | split(" / ")[0]] | unique | length) spaces"' <<<"$ls_json"
+    ;;
+  items)
+    now_ms=$(($(date +%s) * 1000))
+    # `ls` omits title and status time; `get` has them. Only agents that may need you are fetched.
+    for t in $(jq -r '.terminals[] | select(.status == "blocked" or .status == "done") | .address' <<<"$ls_json"); do
+      "$hc" get "$t" 2>/dev/null
+    done | jq -c --argjson now "$now_ms" '
+      ((.labels["herdr.seen"] // "0") | tonumber) as $seen
+      | (if .status.state == "blocked" then "blocked"
+         elif .status.state == "done" and $seen < .turn then "finished"
+         else empty end) as $kind
+      | {
+          source: "herdr-app",
+          id: .address,
+          kind: $kind,
+          title: (.title // .labels.where // .address),
+          detail: (.reason // ""),
+          action: "herdr-core attach \(.address)  (\(.labels.where // ""))",
+          age_min: (if .status_ms then (($now - .status_ms) / 60000 | floor) else null end),
+          tags: [.status.app, (.labels.where // "" | split(" / ")[0])] | map(select(. != null and . != "")),
+          hint: (if $kind == "blocked" then "now" else "done" end)
+        }'
+    ;;
+  *) echo "usage: $0 check|items" >&2; exit 2;;
+esac

@@ -164,7 +164,7 @@ agent-inbox init        # create the private overlay in ~/work-context/inbox/
 ```
 
 - Built-in sources: `tuios` (blocked and finished agents in every session), `herdr` (the same for
-  the herdr server) and `github` (review
+  the herdr CLI server), `herdr-app` (the same for the herdr app, via `herdr-core`) and `github` (review
   requests, red CI on `main` for the repos in `config.toml`; GitHub Enterprise via `hosts`).
 - Company sources (Jira, PagerDuty, internal tools) go in `~/work-context/inbox/sources.d/`, never in
   this repo. Start from `inbox/adapter-template`; a source is any executable answering `check` and `items`.
