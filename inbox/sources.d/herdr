@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# agent-inbox source: herdr agents that are blocked on you or finished and unread.
+# Contract: see inbox/README.md.
+set -uo pipefail
+
+command -v herdr >/dev/null || { echo "herdr not installed → brew install herdr" >&2; exit 3; }
+command -v jq >/dev/null || { echo "jq not installed → brew install jq" >&2; exit 3; }
+
+json=$(herdr agent list 2>/dev/null) || {
+  echo "herdr server not reachable → start herdr" >&2; exit 3; }
+
+case "${1:-items}" in
+  check)
+    jq -r '.result.agents | "\(length) agents in \([.[].workspace_id] | unique | length) workspaces"' <<<"$json"
+    ;;
+  items)
+    # herdr's "done" already means finished and not yet seen.
+    jq -c '
+      .result.agents[]
+      | select(.focused | not)
+      | (if .agent_status == "blocked" then "blocked"
+         elif .agent_status == "done" then "finished"
+         else empty end) as $kind
+      | {
+          source: "herdr",
+          id: .pane_id,
+          kind: $kind,
+          title: (.name // .agent),
+          detail: (.terminal_title_stripped // "")[0:120],
+          action: "herdr agent attach \(.pane_id)",
+          tags: [.agent, .workspace_id] | map(select(. != null and . != "")),
+          hint: (if $kind == "blocked" then "now" else "done" end)
+        }' <<<"$json"
+    ;;
+  *) echo "usage: $0 check|items" >&2; exit 2;;
+esac

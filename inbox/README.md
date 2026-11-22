@@ -8,7 +8,7 @@ connect later. Run `agent-inbox`, `agent-inbox doctor`, `agent-inbox init`.
 | Path | What | Where it lives |
 |---|---|---|
 | `bin/agent-inbox` | Core: runs sources in parallel, applies rules, renders | dotfiles (public) |
-| `inbox/sources.d/` | Generic sources: `tuios`, `github` | dotfiles (public) |
+| `inbox/sources.d/` | Generic sources: `tuios`, `herdr`, `github` | dotfiles (public) |
 | `~/work-context/inbox/sources.d/` | Company sources (Jira, PagerDuty, internal tools) | private |
 | `~/work-context/inbox/config.toml` | Per-source settings (hosts, repos, `enabled`) | private |
 | `~/work-context/inbox/rules.toml` | What counts as "needs me" | private |

@@ -12,6 +12,14 @@ level = "now"
 match = { source = "tuios", kind = "finished" }
 level = "done"
 
+[[rule]]
+match = { source = "herdr", kind = "blocked" }
+level = "now"
+
+[[rule]]
+match = { source = "herdr", kind = "finished" }
+level = "done"
+
 # Red CI on a watched branch
 [[rule]]
 match = { source = "github", kind = "ci-red" }

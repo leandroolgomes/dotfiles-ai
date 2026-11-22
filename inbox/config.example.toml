@@ -6,6 +6,9 @@
 [sources.tuios]
 enabled = true
 
+[sources.herdr]
+enabled = true
+
 [sources.github]
 hosts = ["github.com"]            # add "github.company.com" after: gh auth login --hostname github.company.com
 repos = []                        # watch red CI, e.g. ["org/dlq-manager", "github.company.com:org/api"]
