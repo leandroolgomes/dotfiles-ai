@@ -13,6 +13,8 @@ brew "bat"
 brew "zoxide"
 brew "mise"
 brew "tuios"
+brew "herdr"
+brew "terminal-notifier"
 
 # git
 brew "git"

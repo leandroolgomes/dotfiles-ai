@@ -75,6 +75,12 @@ if [[ ! -e "$TUIOS_CFG" ]]; then
   run mkdir -p "$(dirname "$TUIOS_CFG")"; run cp "$DOTFILES/tuios/config.toml" "$TUIOS_CFG"
   log "Seeded $TUIOS_CFG"
 fi
+# Same for herdr (onboarding and `herdr config reset-keys` write its config).
+HERDR_CFG="$HOME/.config/herdr/config.toml"
+if [[ ! -e "$HERDR_CFG" ]]; then
+  run mkdir -p "$(dirname "$HERDR_CFG")"; run cp "$DOTFILES/herdr/config.toml" "$HERDR_CFG"
+  log "Seeded $HERDR_CFG"
+fi
 
 # ~/.zshrc stays yours; we only add one line that sources the repo's zsh/zshrc.
 MARK="# dotfiles: $DOTFILES/zsh/zshrc"
