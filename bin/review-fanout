@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
-# review-fanout: fan a code review out to several agents in tuios panes, wait for all of them,
+# review-fanout: fan a code review out to several agents in tuios or herdr panes, wait for all of them,
 # then merge their reviews into one report with Claude Haiku. The report ends with "Promote to rule":
 # for recurring mistakes, the strongest check that would catch them next time (see the /learn skill).
 #
 # Usage:
 #   review-fanout --reviewers claude:sonnet-5.5,codex:sol-6.1 [--code-path DIR]
-#                 [--focus TEXT] [--session NAME] [--timeout MIN] [--out DIR]
+#                 [--focus TEXT] [--mux tuios|herdr] [--session NAME] [--timeout MIN] [--out DIR]
 #
 #   --reviewers  Comma-separated cli[:model]. cli is claude or codex; model is optional.
 #                For claude, sonnet-5.5 becomes claude-sonnet-5-5; aliases (opus, sonnet, haiku) pass as is.
 #   --code-path  Directory to review (default: current directory).
 #   --focus      Extra instructions for every reviewer (e.g. "the retry logic in api/").
-#   --session    tuios session for the reviewer panes (default: current tuios session, else review-fanout).
+#   --mux        Where the reviewer panes run (default: the multiplexer you are in, else $AGENT_MUX, else tuios).
+#                herdr uses the herdr server you are attached to (or the default one); it must be running.
+#   --session    tuios session, or herdr workspace label, for the reviewer panes
+#                (default: current tuios session, else review-fanout).
 #   --timeout    Minutes to wait for all reviewers (default: 30).
 #   --out        Where reviews and report.md go (default: $TMPDIR/review-fanout/<dir>-<timestamp>).
 #
-# Each reviewer runs as an interactive agent in its own tuios pane, so it shows in the agents tab
-# and you can answer it there. A finding counts as proven only with a command the reviewer ran and its
+# Each reviewer runs as an interactive agent in its own pane, so it shows in the tuios agents tab or
+# the herdr sidebar and you can answer it there. A finding counts as proven only with a command the reviewer ran and its
 # output; the rest are reported apart as unproven. Reviewers keep repros in the output directory and
 # must not leave changes in the code: claude may run any Bash command (the block-dangerous hook still
 # applies); codex runs in the output directory with a workspace-write sandbox.
@@ -28,11 +31,13 @@ log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
 usage() { sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p;}' "$0"; exit "${1:-0}"; }
 
 REVIEWERS="" CODE_PATH="." FOCUS="" SESSION="${TUIOS_SESSION:-review-fanout}" TIMEOUT_MIN=30 OUT=""
+if [[ "${HERDR_ENV:-}" == 1 ]]; then MUX=herdr; elif [[ -n "${TUIOS_SESSION:-}" ]]; then MUX=tuios; else MUX="${AGENT_MUX:-tuios}"; fi
 while (($#)); do
   case "$1" in
     --reviewers) REVIEWERS="${2:-}"; shift 2;;
     --code-path) CODE_PATH="${2:-}"; shift 2;;
     --focus)     FOCUS="${2:-}"; shift 2;;
+    --mux)       MUX="${2:-}"; shift 2;;
     --session)   SESSION="${2:-}"; shift 2;;
     --timeout)   TIMEOUT_MIN="${2:-}"; shift 2;;
     --out)       OUT="${2:-}"; shift 2;;
@@ -43,7 +48,8 @@ done
 
 [[ -n "$REVIEWERS" ]] || { echo "--reviewers is required" >&2; usage 1; }
 [[ "$TIMEOUT_MIN" =~ ^[0-9]+$ ]] || die "--timeout must be a number of minutes"
-for bin in tuios jq claude; do command -v "$bin" >/dev/null || die "$bin not found on PATH"; done
+[[ "$MUX" == tuios || "$MUX" == herdr ]] || die "--mux must be tuios or herdr"
+for bin in "$MUX" jq claude; do command -v "$bin" >/dev/null || die "$bin not found on PATH"; done
 [[ -d "$CODE_PATH" ]] || die "not a directory: $CODE_PATH"
 CODE="$(cd "$CODE_PATH" && pwd -P)"
 OUT="${OUT:-${TMPDIR:-/tmp}/review-fanout/$(basename "$CODE")-$(date +%Y%m%d-%H%M%S)}"
@@ -68,8 +74,41 @@ Review the code in $CODE. If it is a git repository with uncommitted changes or 
 EOF
 }
 
-state_of() { tuios get-agent-state -s "$SESSION" -w "$1" --json 2>/dev/null | jq -r '.state // "unknown"'; }
-seq_of()   { tuios get-agent-state -s "$SESSION" -w "$1" --json 2>/dev/null | jq -r '.completion_seq // 0'; }
+# Multiplexer backend. States use tuios names: idle, done, working, needs_input, errored; empty = pane gone.
+if [[ "$MUX" == herdr ]]; then
+  WHERE="the herdr sidebar"
+  herdr_agent() { herdr agent get "$1" 2>/dev/null | jq -c '.result.agent'; }
+  state_of() { herdr_agent "$1" | jq -r 'if .agent_status == "blocked" then "needs_input" else .agent_status // "unknown" end'; }
+  seq_of()   { herdr_agent "$1" | jq -r '.completion_seq // 0'; }
+  ask()      { herdr agent prompt "$1" "$2"; }
+  press_enter() { herdr agent send-keys "$1" enter; }
+  HERDR_ANCHOR=""   # first reviewer's pane; the others split off it
+  start_agent() {   # name cwd cli args...
+    local name="$1" cwd="$2" cli="$3" pane; shift 3
+    if [[ -z "$HERDR_ANCHOR" ]]; then
+      pane="$(herdr workspace create --cwd "$cwd" --label "$SESSION" --no-focus | jq -r '.result.root_pane.pane_id')"
+      HERDR_ANCHOR="$pane"
+    else
+      pane="$(herdr pane split --pane "$HERDR_ANCHOR" --direction down --cwd "$cwd" --no-focus | jq -r '.result.pane.pane_id')"
+    fi
+    [[ -n "$pane" && "$pane" != null ]] || { echo "could not create a herdr pane (is herdr running?)"; return 1; }
+    sleep 1   # let the shell reach its prompt
+    herdr agent start "$name" --kind "$cli" --pane "$pane" --timeout 60000 -- "$@"
+  }
+  CLOSE_HINT="herdr pane close <pane>"
+else
+  WHERE="the tuios agents tab"
+  state_of() { tuios get-agent-state -s "$SESSION" -w "$1" --json 2>/dev/null | jq -r '.state // "unknown"'; }
+  seq_of()   { tuios get-agent-state -s "$SESSION" -w "$1" --json 2>/dev/null | jq -r '.completion_seq // 0'; }
+  ask()      { detached tuios ask-agent -s "$SESSION" -w "$1" --lines 1 --timeout 120000 "$2"; }
+  press_enter() { tuios send-keys -s "$SESSION" -w "$1" Enter; }
+  start_agent() {
+    local name="$1" cwd="$2" cli="$3"; shift 3
+    detached tuios start-agent -s "$SESSION" --name "$name" --cwd "$cwd" --grants read \
+      --ready-timeout 60000 "$cli" -- "$@"
+  }
+  CLOSE_HINT="tuios close-window -s '$SESSION' -w NAME"
+fi
 
 # Runs in the background per reviewer: wait until ready, send the prompt, wait for file + rest.
 run_reviewer() {
@@ -79,7 +118,7 @@ run_reviewer() {
     [[ -z "$st" ]] && { echo "[$name] pane is gone" >&2; return 1; }
     [[ "$st" == idle || "$st" == "done" ]] && break
     if [[ "$st" == needs_input && -z "$announced" ]]; then
-      log "[$name] waiting on you before it can start: answer it in the tuios agents tab"; announced=1
+      log "[$name] waiting on you before it can start: answer it in $WHERE"; announced=1
     fi
     ((SECONDS < deadline)) || { echo "[$name] timed out before starting" >&2; return 1; }
     sleep 3
@@ -88,13 +127,12 @@ run_reviewer() {
   sleep 2   # let a freshly started TUI settle before pasting
   local seq; seq="$(seq_of "$name")"
   log "[$name] reviewing"
-  if ! detached tuios ask-agent -s "$SESSION" -w "$name" --lines 1 --timeout 120000 "$(prompt_for "$file")" \
-      >/dev/null 2>"$OUT/$name.ask.log"; then
+  if ! ask "$name" "$(prompt_for "$file")" >/dev/null 2>"$OUT/$name.ask.log"; then
     # A stalled prompt may sit in the input box: if no turn ran, press Enter once.
     sleep 10
     if [[ "$(state_of "$name")" == idle && "$(seq_of "$name")" == "$seq" && ! -s "$file" ]]; then
       log "[$name] prompt did not start; pressing Enter once"
-      tuios send-keys -s "$SESSION" -w "$name" Enter >/dev/null 2>&1 || true
+      press_enter "$name" >/dev/null 2>&1 || true
     fi
   fi
   announced=""
@@ -104,7 +142,7 @@ run_reviewer() {
     [[ -s "$file" && ( "$st" == idle || "$st" == "done" ) ]] && { log "[$name] finished"; return 0; }
     case "$st" in
       errored) echo "[$name] agent errored" >&2; return 1;;
-      needs_input) [[ -z "$announced" ]] && { log "[$name] needs your input in the tuios agents tab"; announced=1; };;
+      needs_input) [[ -z "$announced" ]] && { log "[$name] needs your input in $WHERE"; announced=1; };;
       *) announced="";;
     esac
     ((SECONDS < deadline)) || { echo "[$name] timed out" >&2; return 1; }
@@ -121,7 +159,8 @@ for spec in "${SPECS[@]}"; do
   spec="${spec// /}"; [[ -n "$spec" ]] || continue
   i=$((i + 1))
   cli="${spec%%:*}"; model=""; [[ "$spec" == *:* ]] && model="${spec#*:}"
-  name="review-$i-$(tr -c 'A-Za-z0-9._\n-' '-' <<<"$cli${model:+-$model}")"
+  # herdr agent names: [a-z][a-z0-9_-]{0,31}
+  name="$(tr 'A-Z' 'a-z' <<<"review-$i-$cli${model:+-$model}" | tr -c 'a-z0-9_\n-' '-' | cut -c1-32)"
   file="$OUT/$name.md"
   case "$cli" in
     claude)
@@ -138,9 +177,8 @@ for spec in "${SPECS[@]}"; do
       cwd="$OUT";;
     *) die "unsupported reviewer '$cli' (supported: claude, codex)";;
   esac
-  log "Starting $name in tuios session '$SESSION'"
-  if ! detached tuios start-agent -s "$SESSION" --name "$name" --cwd "$cwd" --grants read \
-        --ready-timeout 60000 "$cli" -- "${args[@]}" >"$OUT/$name.start.log" 2>&1; then
+  log "Starting $name in $MUX '$SESSION'"
+  if ! start_agent "$name" "$cwd" "$cli" "${args[@]}" >"$OUT/$name.start.log" 2>&1; then
     # Not ready is fine if the pane exists (e.g. a trust prompt); run_reviewer waits for it.
     [[ -n "$(state_of "$name")" ]] || { cat "$OUT/$name.start.log" >&2; die "could not start $name"; }
   fi
@@ -149,7 +187,7 @@ for spec in "${SPECS[@]}"; do
 done
 ((${#NAMES[@]})) || die "no reviewers given"
 
-log "Waiting for ${#NAMES[@]} reviewer(s) (timeout ${TIMEOUT_MIN}m). Follow them in the tuios agents tab."
+log "Waiting for ${#NAMES[@]} reviewer(s) (timeout ${TIMEOUT_MIN}m). Follow them in $WHERE."
 OK=() FAILED=()
 for idx in "${!PIDS[@]}"; do
   if wait "${PIDS[$idx]}"; then OK+=("$idx"); else FAILED+=("${NAMES[$idx]}"); fi
@@ -194,6 +232,6 @@ REPORT="$OUT/report.md"
   for idx in "${OK[@]}"; do echo "- \`${FILES[$idx]}\`"; done
 } >"$REPORT"
 
-log "Reviewer panes stay open in session '$SESSION' for follow-ups (close with: tuios close-window -s '$SESSION' -w NAME)."
+log "Reviewer panes stay open in $MUX '$SESSION' for follow-ups (close with: $CLOSE_HINT)."
 ((${#FAILED[@]})) && echo "review-fanout: some reviewers failed: ${FAILED[*]}" >&2
 echo "$REPORT"
