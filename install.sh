@@ -67,6 +67,7 @@ link bin/agent-inbox           "$HOME/.local/bin/agent-inbox"
 link bin/dotfiles-check        "$HOME/.local/bin/dotfiles-check"
 link bin/skill-eval            "$HOME/.local/bin/skill-eval"
 link bin/issue-triage          "$HOME/.local/bin/issue-triage"
+link bin/agent-metrics         "$HOME/.local/bin/agent-metrics"
 
 # tuios rewrites its own config (set-config, hooks), so seed it once instead of symlinking.
 TUIOS_CFG="$HOME/Library/Application Support/tuios/config.toml"

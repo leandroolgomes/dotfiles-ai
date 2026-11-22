@@ -24,6 +24,7 @@ Terminal part inspired by the video "I Tried Everything. This is the Best Termin
 | | `agent-inbox`: one queue of what needs you (blocked agents, reviews, red CI); pluggable sources | `bin/agent-inbox`, `inbox/` (see `inbox/README.md`) |
 | | `skill-eval`: unit tests for skills, judged by a different model | `bin/skill-eval`, `claude/skills/*/evals/` |
 | | `issue-triage`: unattended agent that triages new GitHub issues into the inbox (opt-in) | `bin/issue-triage` |
+| | `agent-metrics`: weekly interrupts, rejections, hook blocks and tokens from your transcripts | `bin/agent-metrics` |
 | Repo checks | `dotfiles-check`: shellcheck, settings, frontmatter, hook tests, gitleaks; runs on pre-commit and install | `bin/dotfiles-check`, `.githooks/` |
 | macOS | Opt-in preferences (not run by the installer) | `macos/defaults.sh` |
 | Packages | Homebrew formulae, casks and taps | `Brewfile` |
@@ -194,6 +195,23 @@ The loop that keeps it growing: a review comment or a bad session → `/learn` (
 `skill-eval --skill X --min-score 9` scores them on eval cases, and you edit until they pass.
 
 Disable a hook for one session: `CLAUDE_REQUIRE_CHECKS=0` or `CLAUDE_FORMAT_ON_EDIT=0`.
+
+### Is it working? (`bin/agent-metrics`)
+
+Reads `~/.claude/projects/**/*.jsonl` and prints, per week, how often you had to step in (interrupts, rejected
+tool calls), how often each hook and ban-patterns rule blocked, and tokens. `claude -p` runs (`issue-triage`,
+`skill-eval`) are counted apart. Use it to see whether a rule from `/learn` or `/dream` changed anything, and to
+drop hooks that never fire.
+
+```sh
+agent-metrics               # last 8 weeks
+agent-metrics --weeks 12 --json
+```
+
+To check a judgment rule, add the correction you kept typing to `~/work-context/metrics/watch.tsv`
+(`label<TAB>regex<TAB>since`, e.g. `blind-staging	git add -A	2026-11-20`); the report shows how often your prompts
+match it per session before and after that date. Claude Code deletes transcripts after `cleanupPeriodDays`
+(set to 365 in `settings.json`), and each run also keeps its weekly counts in `~/.local/state/agent-metrics/`.
 
 ### Unattended triage (`bin/issue-triage`, opt-in)
 

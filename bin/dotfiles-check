@@ -6,7 +6,7 @@
 #   --quick   skip the slower checks (gitleaks)
 #
 # Checks: shellcheck on every bash script, claude/settings.json is valid and every hook it calls
-# exists in the repo, SKILL.md/agent frontmatter, every claude/**/tests/run.sh, gitleaks.
+# exists in the repo, SKILL.md/agent frontmatter, every claude/**/tests/run.sh and bin/tests/*/run.sh, gitleaks.
 # A missing tool is a warning, not a failure, so a fresh machine can still install.
 set -uo pipefail
 
@@ -72,7 +72,7 @@ step "tests"
 while IFS= read -r t; do
   [[ -x "$t" ]] || { bad "${t#"$REPO"/} is not executable"; continue; }
   "$t" || bad "${t#"$REPO"/} failed"
-done < <(find "$REPO/claude" -path '*/tests/run.sh' -type f | sort)
+done < <(find "$REPO/claude" "$REPO/bin" -path '*/tests/*run.sh' -type f | sort)
 
 if ((!QUICK)); then
   step "gitleaks (public repo)"

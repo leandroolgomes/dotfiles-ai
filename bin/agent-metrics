@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""agent-metrics: weekly numbers from your Claude Code transcripts, to tell whether a hook or rule helped.
+
+Usage:
+  agent-metrics [--weeks N] [--json] [--projects DIR] [--state FILE] [--no-save]
+
+Per ISO week, for interactive sessions (claude -p runs are counted apart as "automated"):
+  interrupts   you pressed Esc ("[Request interrupted by user]")
+  rejected     you rejected a tool call
+  blocks       hook blocks, by hook, by ban-patterns rule, and Stop-hook blocks
+  tokens       output and total (input + cache write + cache read + output), subagents included
+
+Watched patterns: $WORK_CONTEXT/metrics/watch.tsv (default ~/work-context), one per line,
+  label<TAB>regex<TAB>since (YYYY-MM-DD)
+counts your prompts that match the regex (e.g. a correction you keep typing) per session,
+before and after the date a rule for it was added.
+
+Claude Code deletes transcripts after cleanupPeriodDays (30 by default), so each run merges its weekly
+counts into --state (default ~/.local/state/agent-metrics/weeks.json, keeping the higher count per week).
+--no-save reads the state without writing it.
+"""
+import argparse
+import json
+import os
+import re
+import sys
+from collections import defaultdict
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+HOOK_ERROR = re.compile(r"^(?:PreToolUse|PostToolUse):\w+ hook error: \[([^\]]+)\]")
+RULE_LINE = re.compile(r"^- (.+?)\s+\[rule: ", re.M)
+STOP_HOOKS = [("Code changed after the last check", "require-checks.sh"), ("HYPOTHESIS.md", "proof-gate.sh")]
+SCALARS = ["sessions", "interrupts", "rejections", "tokens_in", "tokens_cache_write", "tokens_cache_read", "tokens_out"]
+LABELED = ["hook_block", "rule_block", "stop_block", "watch"]
+
+
+def week_of(ts):
+    y, w, _ = datetime.fromisoformat(ts.replace("Z", "+00:00")).isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def texts(content):
+    """Text items of a message content (a string or a list of blocks)."""
+    if isinstance(content, str):
+        return [content]
+    return [c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text"]
+
+
+def tool_result_text(block):
+    c = block.get("content")
+    return c if isinstance(c, str) else " ".join(x.get("text", "") for x in c or [] if isinstance(x, dict))
+
+
+def load_watch():
+    path = Path(os.environ.get("WORK_CONTEXT", Path.home() / "work-context")) / "metrics" / "watch.tsv"
+    watch = []
+    if path.is_file():
+        for line in path.read_text().splitlines():
+            if not line.strip() or line.startswith("#"):
+                continue
+            label, regex, since = (line.split("\t") + ["", ""])[:3]
+            try:
+                watch.append({"label": label, "re": re.compile(regex), "since": date.fromisoformat(since.strip())})
+            except (re.error, ValueError) as e:
+                print(f"agent-metrics: skipping watch line {line!r}: {e}", file=sys.stderr)
+    return watch
+
+
+def scan_file(path, watch, rows):
+    """Add one transcript's counts to rows[(week, scope, kind, label)]."""
+    subagent = "subagents" in path.parts
+    events, seen_ids, scope, first_ts = [], set(), None, None
+    with path.open(errors="replace") as f:
+        for line in f:
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts = e.get("timestamp")
+            if not ts or e.get("type") not in ("user", "assistant"):
+                continue
+            scope = scope or e.get("entrypoint")
+            first_ts = first_ts or ts
+            msg = e.get("message") or {}
+            if e["type"] == "assistant":
+                usage, mid = msg.get("usage"), msg.get("id")
+                if usage and mid not in seen_ids:
+                    seen_ids.add(mid)
+                    for kind, key in [("tokens_in", "input_tokens"), ("tokens_cache_write", "cache_creation_input_tokens"),
+                                      ("tokens_cache_read", "cache_read_input_tokens"), ("tokens_out", "output_tokens")]:
+                        events.append((ts, kind, "", usage.get(key) or 0))
+                continue
+            if subagent or e.get("isSidechain"):
+                continue
+            content = msg.get("content")
+            for block in content if isinstance(content, list) else []:
+                if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error"):
+                    text = tool_result_text(block)
+                    if text.startswith("The user doesn't want to proceed"):
+                        events.append((ts, "rejections", "", 1))
+                    elif m := HOOK_ERROR.match(text):
+                        events.append((ts, "hook_block", Path(m.group(1)).name, 1))
+                        events += [(ts, "rule_block", r, 1) for r in RULE_LINE.findall(text)]
+            for text in texts(content):
+                if text.strip() == "[Request interrupted by user]":
+                    events.append((ts, "interrupts", "", 1))
+                elif text.startswith("Stop hook feedback:"):
+                    hook = next((h for marker, h in STOP_HOOKS if marker in text), "other")
+                    events.append((ts, "stop_block", hook, 1))
+                elif not e.get("isMeta") and not text.startswith(("<", "[")):
+                    events += [(ts, "watch", w["label"], 1) for w in watch if w["re"].search(text)]
+    if not first_ts:
+        return
+    scope = "automated" if scope == "sdk-cli" else "interactive"
+    if not subagent:
+        events.append((first_ts, "sessions", "", 1))
+    for ts, kind, label, n in events:
+        rows[(week_of(ts), scope, kind, label)] += n
+
+
+def merge_state(rows, state_path, save):
+    if state_path.is_file():
+        for week, scope, kind, label, n in json.loads(state_path.read_text()).get("rows", []):
+            key = (week, scope, kind, label)
+            rows[key] = max(rows[key], n)
+    if save:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = state_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"rows": [[*k, n] for k, n in sorted(rows.items()) if n]}))
+        tmp.replace(state_path)
+
+
+def build(rows, watch):
+    weeks = defaultdict(lambda: defaultdict(lambda: {**{k: 0 for k in SCALARS}, **{k: {} for k in LABELED}}))
+    for (week, scope, kind, label), n in rows.items():
+        cell = weeks[week][scope]
+        if kind in LABELED:
+            cell[kind][label] = cell[kind].get(label, 0) + n
+        else:
+            cell[kind] += n
+    for scopes in weeks.values():
+        for cell in scopes.values():
+            cell["tokens_total"] = sum(cell[k] for k in SCALARS if k.startswith("tokens_"))
+    watched = []
+    for w in watch:
+        since = week_of(w["since"].isoformat() + "T00:00:00Z")
+        sides = {"before": {"matches": 0, "sessions": 0}, "after": {"matches": 0, "sessions": 0}}
+        for week, scopes in weeks.items():
+            cell = scopes.get("interactive")
+            if cell:
+                side = sides["after" if week >= since else "before"]
+                side["matches"] += cell["watch"].get(w["label"], 0)
+                side["sessions"] += cell["sessions"]
+        watched.append({"label": w["label"], "since": w["since"].isoformat(), **sides})
+    return {"weeks": {k: dict(v) for k, v in sorted(weeks.items())}, "watched": watched}
+
+
+def last_weeks(latest, n):
+    y, w = map(int, latest.split("-W"))
+    monday = date.fromisocalendar(y, w, 1)
+    return [week_of((monday - timedelta(weeks=i)).isoformat() + "T00:00:00Z") for i in reversed(range(n))]
+
+
+def human(n):
+    for unit, size in (("B", 1e9), ("M", 1e6), ("k", 1e3)):
+        if n >= size:
+            return f"{n / size:.1f}{unit}"
+    return str(n)
+
+
+def report(data, n_weeks):
+    if not data["weeks"]:
+        print("agent-metrics: no transcripts found")
+        return
+    weeks = last_weeks(max(data["weeks"]), n_weeks)
+    cells = [data["weeks"].get(w, {}).get("interactive") for w in weeks]
+    print(f"Interactive sessions, {weeks[0]} .. {weeks[-1]}")
+    print(f"{'week':<10}{'sessions':>9}{'interrupts':>12}{'rejected':>10}{'blocks':>8}{'tokens out':>12}{'tokens total':>14}")
+    for week, c in zip(weeks, cells):
+        if not c:
+            print(f"{week:<10}{'-':>9}")
+            continue
+        blocks = sum(c["hook_block"].values()) + sum(c["stop_block"].values())
+        print(f"{week:<10}{c['sessions']:>9}{c['interrupts']:>12}{c['rejections']:>10}{blocks:>8}"
+              f"{human(c['tokens_out']):>12}{human(c['tokens_total']):>14}")
+
+    def total(kind):
+        t = defaultdict(int)
+        for c in filter(None, cells):
+            for label, n in c[kind].items():
+                t[label] += n
+        return sorted(t.items(), key=lambda kv: -kv[1])
+
+    blocks = [(f"hook  {k}", n) for k, n in total("hook_block")] + [(f"stop  {k}", n) for k, n in total("stop_block")]
+    rules = total("rule_block")
+    if blocks or rules:
+        print(f"\nBlocks in these {n_weeks} weeks")
+        for label, n in blocks:
+            print(f"  {n:>5}  {label}")
+        for label, n in rules:
+            print(f"  {n:>5}  rule  {label}")
+
+    if data["watched"]:
+        print("\nWatched patterns (your prompts that match, per session)")
+        for w in data["watched"]:
+            def side(s):
+                rate = f"{s['matches'] / s['sessions']:.2f}" if s["sessions"] else "-"
+                return f"{s['matches']} in {s['sessions']} sessions ({rate})"
+            print(f"  {w['label']} (since {w['since']}): before {side(w['before'])} -> after {side(w['after'])}")
+
+    auto = [data["weeks"].get(w, {}).get("automated") for w in weeks]
+    auto = [a for a in auto if a]
+    if auto:
+        print(f"\nAutomated runs (claude -p): {sum(a['sessions'] for a in auto)} sessions, "
+              f"{human(sum(a['tokens_total'] for a in auto))} tokens")
+
+
+def main():
+    state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--weeks", type=int, default=8, help="weeks to show (default 8)")
+    p.add_argument("--json", action="store_true", help="print all weeks as JSON")
+    p.add_argument("--projects", type=Path, default=Path.home() / ".claude" / "projects")
+    p.add_argument("--state", type=Path, default=state_home / "agent-metrics" / "weeks.json")
+    p.add_argument("--no-save", action="store_true", help="do not update the state file")
+    a = p.parse_args()
+    if not a.projects.is_dir():
+        print(f"agent-metrics: no transcripts directory: {a.projects}", file=sys.stderr)
+        sys.exit(2)
+    watch = load_watch()
+    rows = defaultdict(int)
+    for path in sorted(a.projects.rglob("*.jsonl")):
+        scan_file(path, watch, rows)
+    merge_state(rows, a.state, save=not a.no_save)
+    data = build(rows, watch)
+    if a.json:
+        print(json.dumps(data, indent=2))
+    else:
+        report(data, a.weeks)
+
+
+if __name__ == "__main__":
+    main()
