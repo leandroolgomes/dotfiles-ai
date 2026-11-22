@@ -31,7 +31,10 @@ log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
 usage() { sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p;}' "$0"; exit "${1:-0}"; }
 
 REVIEWERS="" CODE_PATH="." FOCUS="" SESSION="${TUIOS_SESSION:-review-fanout}" TIMEOUT_MIN=30 OUT=""
-if [[ "${HERDR_ENV:-}" == 1 ]]; then MUX=herdr; elif [[ -n "${TUIOS_SESSION:-}" ]]; then MUX=tuios; else MUX="${AGENT_MUX:-tuios}"; fi
+# tuios panes also set HERDR_* (tuios serves a herdr-compatible API), so check tuios first and drop
+# those vars: the herdr CLI would otherwise talk to tuios instead of the herdr server.
+if [[ -n "${TUIOS_SESSION:-}" ]]; then MUX=tuios; unset HERDR_ENV HERDR_SOCKET_PATH
+elif [[ "${HERDR_ENV:-}" == 1 ]]; then MUX=herdr; else MUX="${AGENT_MUX:-tuios}"; fi
 while (($#)); do
   case "$1" in
     --reviewers) REVIEWERS="${2:-}"; shift 2;;
